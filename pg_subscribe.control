@@ -1,0 +1,7 @@
+# pg_subscribe extension control file
+comment = 'PostgreSQL Reactive SUBSCRIBE Protocol with IVM Support'
+default_version = '0.1.0'
+module_pathname = '$libdir/pg_subscribe'
+relocatable = false
+superuser = true
+requires = ''

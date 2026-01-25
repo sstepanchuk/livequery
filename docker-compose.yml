@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pg_subscribe_dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./examples/setup_test_db.sql:/docker-entrypoint-initdb.d/setup.sql
+    command: >
+      postgres
+      -c shared_preload_libraries=''
+      -c log_statement=all
+      -c log_min_messages=info
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Development container with Rust toolchain
+  dev:
+    image: rust:1.75
+    container_name: pg_subscribe_builder
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - cargo_cache:/usr/local/cargo/registry
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      PG_CONFIG: /usr/lib/postgresql/16/bin/pg_config
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  postgres_data:
+  cargo_cache:
