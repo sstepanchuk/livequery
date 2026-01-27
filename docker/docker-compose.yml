@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+    environment:
+      POSTGRES_USER: livequery
+      POSTGRES_PASSWORD: livequery
+      POSTGRES_DB: livequery
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_replication_slots=4
+      -c max_wal_senders=4
+      -c log_min_messages=fatal
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U livequery"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "9222:9222"
+    command: ["-c", "/etc/nats/nats.conf"]
+    volumes:
+      - ./data/nats:/data
+      - ./nats.conf:/etc/nats/nats.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  livequery:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      DATABASE_URL: postgres://livequery:livequery@postgres:5432/livequery
+      NATS_URL: nats://nats:4222
+      RUST_LOG: info,livequery_server=debug
+      WAL_SLOT: livequery_slot
+      WAL_PUBLICATION: livequery_pub
+      CLIENT_TIMEOUT_SECS: 60
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  sql-api:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./sql-api:/app
+    command: sh -c "npm install && npm start"
+    environment:
+      DATABASE_URL: postgres://livequery:livequery@postgres:5432/livequery
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "3000:80"
+    depends_on:
+      - livequery
+      - sql-api
+
+volumes:
+  postgres_data:

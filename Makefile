@@ -1,96 +1,59 @@
-# Makefile for pg_subscribe PostgreSQL extension
+.PHONY: build run test clean docker-up docker-down fmt lint check help
 
-EXTENSION = pg_subscribe
-PG_CONFIG ?= pg_config
-
-# Default PostgreSQL version
-PG_VERSION ?= pg16
-
-.PHONY: all build install test clean run package help
-
-all: build
-
-# Build the extension
 build:
-	cargo pgrx package --features $(PG_VERSION)
+	cargo build --release
 
-# Build for development (debug)
-build-dev:
-	cargo build
-
-# Install to PostgreSQL
-install:
-	cargo pgrx install --release --features $(PG_VERSION)
-
-# Install for development
-install-dev:
-	cargo pgrx install --features $(PG_VERSION)
-
-# Run tests
-test:
-	cargo pgrx test $(PG_VERSION)
-
-# Run unit tests only (no PostgreSQL)
-test-unit:
-	cargo test --lib
-
-# Run PostgreSQL with extension loaded
 run:
-	cargo pgrx run $(PG_VERSION)
+	cargo run
 
-# Clean build artifacts
+test:
+	cargo test
+
 clean:
 	cargo clean
-	rm -rf target/
 
-# Format code
 fmt:
 	cargo fmt
 
-# Lint code
 lint:
 	cargo clippy -- -D warnings
 
-# Check code without building
 check:
 	cargo check
 
-# Generate documentation
-doc:
-	cargo doc --no-deps --open
+# Docker commands
+docker-up:
+	docker-compose up -d
 
-# Package for distribution
-package:
-	cargo pgrx package --features $(PG_VERSION)
-	@echo "Package created in target/release/$(EXTENSION)-$(PG_VERSION)"
+docker-down:
+	docker-compose down
 
-# Create schema dump
-schema:
-	cargo pgrx schema $(PG_VERSION)
+docker-logs:
+	docker-compose logs -f livequery
 
-# Help
+docker-build:
+	docker-compose build
+
+# Development with auto-reload (requires cargo-watch)
+watch:
+	cargo watch -x run
+
 help:
-	@echo "pg_subscribe Makefile targets:"
+	@echo "LiveQuery Server Makefile"
 	@echo ""
-	@echo "  build       - Build the extension (release)"
-	@echo "  build-dev   - Build for development (debug)"
-	@echo "  install     - Install to PostgreSQL"
-	@echo "  install-dev - Install development version"
-	@echo "  test        - Run all tests"
-	@echo "  test-unit   - Run unit tests only"
-	@echo "  run         - Start PostgreSQL with extension"
-	@echo "  clean       - Clean build artifacts"
-	@echo "  fmt         - Format code"
-	@echo "  lint        - Lint code with clippy"
-	@echo "  check       - Check code without building"
-	@echo "  doc         - Generate documentation"
-	@echo "  package     - Package for distribution"
-	@echo "  schema      - Generate SQL schema"
+	@echo "  build        - Build release binary"
+	@echo "  run          - Run server locally"
+	@echo "  test         - Run tests"
+	@echo "  clean        - Clean build artifacts"
+	@echo "  fmt          - Format code"
+	@echo "  lint         - Lint with clippy"
+	@echo "  check        - Check without building"
 	@echo ""
-	@echo "Environment variables:"
-	@echo "  PG_VERSION  - PostgreSQL version (default: pg16)"
-	@echo "                Options: pg13, pg14, pg15, pg16, pg17"
+	@echo "Docker:"
+	@echo "  docker-up    - Start all services"
+	@echo "  docker-down  - Stop all services"
+	@echo "  docker-logs  - Follow livequery logs"
+	@echo "  docker-build - Rebuild containers"
 	@echo ""
-	@echo "Examples:"
-	@echo "  make install PG_VERSION=pg15"
-	@echo "  make test PG_VERSION=pg16"
+	@echo "Development:"
+	@echo "  watch        - Run with auto-reload"

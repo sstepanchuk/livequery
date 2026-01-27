@@ -1,238 +1,173 @@
-# pg_subscribe
+# LiveQuery Server
 
-**Reactive SUBSCRIBE for PostgreSQL** — Materialize-compatible change data streaming for any SQL query.
+Real-time SQL query subscriptions for PostgreSQL via NATS.
 
-[![PostgreSQL 13-17](https://img.shields.io/badge/PostgreSQL-13--17-336791?logo=postgresql)](https://www.postgresql.org/)
-[![Rust](https://img.shields.io/badge/Rust-pgrx-orange?logo=rust)](https://github.com/pgcentralfoundation/pgrx)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+## What is it?
 
-## Features
+LiveQuery lets you subscribe to SQL query results. When data changes in PostgreSQL, clients automatically receive updates.
 
-- 🔄 **Reactive Subscriptions** — Subscribe to any SELECT query and receive real-time change events
-- 🎯 **Materialize-Compatible** — Uses `mz_timestamp`, `mz_diff`, `mz_progressed` semantics
-- 🔗 **Complex Query Support** — JOINs, aggregations, CTEs, window functions, subqueries
-- ⚡ **Shared Triggers** — One trigger per table, fan-out to all subscribers
-- 🔁 **Query Deduplication** — Identical queries share the same subscription slot
-- 📊 **Full Type Support** — All PostgreSQL types serialized to JSON correctly
-- 🦀 **Built with Rust** — Memory-safe implementation using pgrx
-
-## Quick Start
+## Quick Start with Docker
 
 ```bash
-# Install pgrx
-cargo install cargo-pgrx
-cargo pgrx init --pg16 /path/to/pg_config
+cd docker
+docker-compose up -d
 
-# Build and install
-cargo pgrx install --release
-
-# Enable in PostgreSQL (add to postgresql.conf for shared memory)
-# shared_preload_libraries = 'pg_subscribe'
+# Open test frontend
+open http://localhost:3000
 ```
+
+That's it! PostgreSQL, NATS, LiveQuery server, and test frontend are all running.
+
+## Quick Start (Manual)
+
+### 1. Setup PostgreSQL
 
 ```sql
-CREATE EXTENSION pg_subscribe;
+ALTER SYSTEM SET wal_level = 'logical';
+ALTER SYSTEM SET max_replication_slots = 4;
+ALTER SYSTEM SET max_wal_senders = 4;
+-- Restart PostgreSQL
 
--- Subscribe to a query
-SELECT * FROM subscribe('SELECT * FROM users WHERE active = true');
+SELECT pg_create_logical_replication_slot('livequery_slot', 'pgoutput');
+CREATE PUBLICATION livequery_pub FOR ALL TABLES;
 ```
 
-## Output Format
+### 2. Run Server
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `mz_timestamp` | `bigint` | PostgreSQL transaction timestamp |
-| `mz_diff` | `int` | `+1` = INSERT, `-1` = DELETE |
-| `mz_progressed` | `bool` | `true` = heartbeat, `false` = data |
-| `data` | `jsonb` | Row data with proper types |
-
-### Example Output
-
-```
- mz_timestamp    | mz_diff | mz_progressed | data
------------------+---------+---------------+------------------------------------
- 822693589867596 |       1 | f             | {"id": 1, "name": "Alice", "active": true}
- 822693589867596 |       1 | f             | {"id": 2, "name": "Bob", "active": true}
+```bash
+DATABASE_URL=postgres://user:pass@localhost/mydb \
+NATS_URL=nats://localhost:4222 \
+cargo run --release
 ```
 
-### Update Semantics
+### 3. Subscribe
 
-Updates emit two events (like Materialize):
-```sql
-UPDATE users SET name = 'Alice Smith' WHERE id = 1;
--- Results in:
--- mz_diff = -1, data = {"id": 1, "name": "Alice", ...}      -- DELETE old
--- mz_diff = +1, data = {"id": 1, "name": "Alice Smith", ...} -- INSERT new
+```javascript
+const subscriptionId = "client-1-orders";
+const response = await nats.request(`livequery.${subscriptionId}.subscribe`, {
+  subscription_id: subscriptionId,
+  query: "SELECT * FROM orders WHERE user_id = 123",
+  mode: "events"  // or "snapshot"
+});
+
+nats.subscribe(response.subject, (msg) => {
+  console.log('Changes:', msg.events);
+});
 ```
 
-## API Reference
+## Two Modes
 
-### Core Functions
+| Mode | Description | Use When |
+|------|-------------|----------|
+| **events** | Individual INSERT/UPDATE/DELETE events | Client maintains local state |
+| **snapshot** | Full data on every change | Simple client (just displays data) |
 
-```sql
--- Reactive subscription (streams continuously)
-SELECT * FROM subscribe(
-    query TEXT,
-    identity_columns TEXT[] DEFAULT NULL  -- optional: columns for efficient diffing
-);
+### Events Mode (default)
+```json
+// Initial response
+{ "snapshot": [{"mz_diff": 1, "data": {"id": 1, "name": "Order 1"}}] }
 
--- Snapshot only (returns current state, then completes)
-SELECT * FROM subscribe_snapshot(query TEXT, identity_columns TEXT[] DEFAULT NULL);
-
--- Prepare subscription (returns subscription_id for LISTEN)
-SELECT pg_subscribe_prepare(query TEXT);
+// On change (ts = server timestamp in ms for latency calculation)
+{ "seq": 5, "ts": 1706400000000, "events": [
+  {"mz_diff": -1, "data": {"id": 1, "name": "Order 1"}},
+  {"mz_diff": 1,  "data": {"id": 1, "name": "Updated"}}
+]}
 ```
 
-### Analysis & Monitoring
+### Snapshot Mode
+```json
+// Initial response
+{ "rows": [{"id": 1, "name": "Order 1"}, {"id": 2, "name": "Order 2"}] }
 
-```sql
--- Analyze query for IVM compatibility
-SELECT pg_subscribe_analyze_query('SELECT * FROM users JOIN orders ON ...');
-
--- View statistics
-SELECT * FROM pg_subscribe_stats();
-
--- View tracked tables with triggers
-SELECT * FROM pg_subscribe_tracked_tables();
-
--- View deduplicated queries
-SELECT * FROM pg_subscribe_deduplicated_queries();
+// On any change - full new snapshot
+{ "seq": 5, "ts": 1706400000000, "rows": [{"id": 1, "name": "Updated"}, {"id": 2, "name": "Order 2"}] }
 ```
 
-### Utility Functions
-
-```sql
--- Normalize query (for deduplication testing)
-SELECT pg_subscribe_normalize_query('SELECT  *  FROM  users');
-
--- Compute query hash
-SELECT pg_subscribe_query_hash('SELECT * FROM users');
+### Latency Measurement
+Each event batch includes `ts` (server timestamp in milliseconds). Calculate latency:
+```javascript
+const latency = Date.now() - batch.ts; // ms from server to client
 ```
 
-## Supported Query Types
+## Pros
 
-| Query Type | Support | Notes |
-|------------|---------|-------|
-| Simple SELECT | ✅ Full | |
-| WHERE filters | ✅ Full | |
-| ORDER BY, LIMIT | ✅ Full | |
-| INNER JOIN | ✅ Full | |
-| LEFT/RIGHT JOIN | ⚠️ Limited | Works via snapshot-diff |
-| GROUP BY + aggregates | ✅ Full | COUNT, SUM, AVG, MIN, MAX |
-| DISTINCT | ✅ Full | |
-| Subqueries | ⚠️ Limited | Works via snapshot-diff |
-| CTE (WITH) | ⚠️ Limited | Works via snapshot-diff |
-| Window Functions | ⚠️ Limited | Works via snapshot-diff |
+- **Simple** - Plain SQL, no new languages
+- **Fast** - Rust + native PostgreSQL streaming, <10ms latency
+- **Shared subscriptions** - Same queries share one snapshot
+- **WHERE optimization** - Filters evaluated server-side, skip unnecessary requery
+- **Two modes** - Events for complex clients, snapshot for simple ones
 
-## Configuration
+## Cons / Limitations
 
-```sql
--- Heartbeat interval (default: 1000ms)
-SET pg_subscribe.heartbeat_interval_ms = 500;
+- **Requery on change** - Full SELECT on change (not incremental)
+- **Memory** - Each subscription snapshot in RAM
+- **PostgreSQL only** - Requires logical replication
+- **Simple queries** - Complex JOINs/subqueries may be slow
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | required | PostgreSQL connection string |
+| `NATS_URL` | `nats://localhost:4222` | NATS server |
+| `WAL_SLOT` | `livequery_slot` | Replication slot name |
+| `WAL_PUBLICATION` | `livequery_pub` | Publication name |
+| `CLIENT_TIMEOUT_SECS` | `30` | Inactive client timeout |
+| `MAX_SUBSCRIPTIONS` | `10000` | Max subscriptions |
+| `DB_POOL_SIZE` | `16` | Connection pool size |
+
+## NATS API
+
+| Subject | Description |
+|---------|-------------|
+| `livequery.{subscription_id}.subscribe` | Subscribe to query (request-reply) |
+| `livequery.{subscription_id}.unsubscribe` | Unsubscribe |
+| `livequery.{subscription_id}.heartbeat` | Keep-alive |
+| `livequery.{subscription_id}.events` | Receive updates (subscribe to this after registering) |
+
+## Project Structure
+
+```
+docker/
+├── docker-compose.yml   # All services
+├── Dockerfile           # LiveQuery server
+├── init.sql             # Sample data
+├── data/                # Container volumes
+└── frontend/            # Test UI
 ```
 
-Compile-time constants (in `src/shmem.rs`):
-- `MAX_SLOTS = 64` — Maximum concurrent subscriptions
-- `MAX_EVENTS_PER_SLOT = 32` — Event buffer size per subscription
-- `MAX_TRACKED_TABLES = 32` — Maximum tables with triggers
-
-## Architecture
+## How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Client                                  │
-│              SELECT * FROM subscribe(...)                    │
-└─────────────────────────┬───────────────────────────────────┘
+│  Client                                                     │
+│    │                                                        │
+│    ├─► NATS.request("livequery.{id}.subscribe", {query})   │
+│    │                                                        │
+│    ◄── Initial snapshot/events                              │
+│    │                                                        │
+│    ◄── Live updates on changes                              │
+└─────────────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
-│                   pg_subscribe                               │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
-│  │   Query     │  │   Snapshot   │  │  Shared Memory    │   │
-│  │  Analyzer   │  │    Diff      │  │   Ring Buffers    │   │
-│  └─────────────┘  └──────────────┘  └───────────────────┘   │
-│         │                │                    ▲              │
-│         ▼                ▼                    │              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │            Shared Triggers (1 per table)             │    │
-│  │   users: _pgsub_shared_users                         │    │
-│  │   orders: _pgsub_shared_orders                       │    │
-│  └─────────────────────────────────────────────────────┘    │
+│  LiveQuery Server                                           │
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ Subscription │    │  Snapshot   │    │   WHERE     │     │
+│  │   Manager    │    │   Cache     │    │   Filter    │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ WAL Streamer (pgoutput binary protocol)              │   │
+│  │  └─► Native PostgreSQL replication stream            │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│  PostgreSQL (wal_level=logical)                             │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-## Client Examples
-
-### Python
-
-```python
-import psycopg2
-
-conn = psycopg2.connect("dbname=mydb")
-conn.autocommit = True
-
-with conn.cursor() as cur:
-    cur.execute("SELECT * FROM subscribe('SELECT * FROM users')")
-    for mz_timestamp, mz_diff, mz_progressed, data in cur:
-        if mz_progressed:
-            print(f"Heartbeat at {mz_timestamp}")
-        elif mz_diff == 1:
-            print(f"INSERT: {data}")
-        else:
-            print(f"DELETE: {data}")
-```
-
-### Node.js
-
-```javascript
-const { Client } = require('pg');
-
-const client = new Client();
-await client.connect();
-
-const res = await client.query(
-  "SELECT * FROM subscribe('SELECT * FROM users')"
-);
-
-for (const row of res.rows) {
-  if (row.mz_progressed) {
-    console.log('Heartbeat:', row.mz_timestamp);
-  } else if (row.mz_diff === 1) {
-    console.log('INSERT:', row.data);
-  } else {
-    console.log('DELETE:', row.data);
-  }
-}
-```
-
-## Development
-
-```bash
-# Run tests
-cargo pgrx test pg16
-
-# Run Python integration tests
-source .venv/bin/activate
-python tests/test_modern.py
-
-# Development server
-cargo pgrx run pg16
-```
-
-## Requirements
-
-- PostgreSQL 13, 14, 15, 16, or 17
-- Rust 1.70+
-- For shared memory features: add to `postgresql.conf`:
-  ```
-  shared_preload_libraries = 'pg_subscribe'
-  ```
 
 ## License
 
 MIT
-
-## Acknowledgments
-
-- Inspired by [Materialize](https://materialize.com/) SUBSCRIBE protocol
-- Built with [pgrx](https://github.com/pgcentralfoundation/pgrx)
-- SQL parsing via [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)

@@ -1,45 +1,76 @@
 [package]
-name = "pg_subscribe"
+name = "livequery-server"
 version = "0.1.0"
 edition = "2021"
-description = "PostgreSQL extension for reactive SUBSCRIBE protocol with IVM support"
-license = "MIT"
-
-[lib]
-crate-type = ["cdylib", "lib"]
 
 [[bin]]
-name = "pgrx_embed_pg_subscribe"
-path = "src/bin/pgrx_embed.rs"
+name = "livequery-server"
+path = "src/main.rs"
 
-[features]
-default = ["pg16"]
-pg13 = ["pgrx/pg13", "pgrx-tests/pg13"]
-pg14 = ["pgrx/pg14", "pgrx-tests/pg14"]
-pg15 = ["pgrx/pg15", "pgrx-tests/pg15"]
-pg16 = ["pgrx/pg16", "pgrx-tests/pg16"]
-pg17 = ["pgrx/pg17", "pgrx-tests/pg17"]
-pg_test = []
+[[bin]]
+name = "test-queries"
+path = "scripts/test_queries.rs"
+
+[[bin]]
+name = "test-db"
+path = "scripts/test_db.rs"
 
 [dependencies]
-pgrx = "0.12.6"
-serde = { version = "1.0", features = ["derive"] }
+# Async
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "signal", "time"] }
+futures = "0.3"
+
+# PostgreSQL
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1", "with-chrono-0_4"] }
+deadpool-postgres = "0.14"
+pgwire-replication = "0.1"
+
+# NATS
+async-nats = "0.39"
+bytes = "1"
+
+# SQL parsing
+sqlparser = "0.54"
+
+# Serialization
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
-uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.12", features = ["v4", "serde"] }
+
+# Fast data structures
+dashmap = "6"
+rustc-hash = "2"
 parking_lot = "0.12"
-crossbeam-channel = "0.5"
-heapless = "0.8"  # Fixed-size collections for shared memory
-sqlparser = "0.52"  # SQL AST parser with PostgreSQL dialect support
+itoa = "1"
+memchr = "2"
+
+# Utils
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+dotenvy = "0.15"
+smallvec = "1.15"
 
 [dev-dependencies]
-pgrx-tests = "0.12.6"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "perf"
+harness = false
 
 [profile.dev]
-panic = "unwind"
-lto = "thin"
+opt-level = 1
 
 [profile.release]
-panic = "unwind"
 opt-level = 3
-lto = "fat"
+lto = "thin"
 codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+
+
