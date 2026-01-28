@@ -128,6 +128,7 @@
                 <div class="actions" style="margin-top:0">
                     <button class="success" id="subBtn" disabled>Subscribe</button>
                     <button class="primary" id="execBtn">Execute</button>
+                    <button class="ghost" id="saveSqlBtn">Save</button>
                     <span style="border-left:1px solid var(--border);margin:0 4px"></span>
                     <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Insert</button>
                     <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship</button>
@@ -161,10 +162,10 @@
                 
                 <div style="margin-top:32px;">
                     <div class="log-header">
-                        <h3>Saved Queries</h3>
+                        <h3>Saved SQL Statements</h3>
                         <button class="ghost" id="clearSaved" style="padding:6px 10px;font-size:11px;">Clear All</button>
                     </div>
-                    <div id="savedQueries" style="margin-top:12px;"></div>
+                    <div id="savedSql" style="margin-top:12px;"></div>
                 </div>
             </div>
         </main>
@@ -242,7 +243,6 @@
             const q = editor.getValue().trim(), mode = $('mode').value;
             if (!q) return;
             
-            saveQuery(q);
             $('subBtn').disabled = true; $('subBtn').textContent = 'Subscribing...';
             const id = `w${Date.now()}-${++cnt}`;
             try {
@@ -281,6 +281,7 @@
         };
         
         $('execBtn').onclick = () => execSql(editor.getValue());
+        $('saveSqlBtn').onclick = () => { const sql = editor.getValue().trim(); if (sql) { saveSql(sql); log('SQL saved', 'ok'); } };
         document.querySelectorAll('[data-sql]').forEach(b => b.onclick = () => { editor.setValue(b.dataset.sql); execSql(b.dataset.sql); });
         $('clearLog').onclick = () => $('log').innerHTML = '';
         
@@ -295,27 +296,27 @@
             if (url) $('natsUrl').value = url;
         };
         
-        const saveQuery = q => {
-            const saved = LS.get('queries') || [];
-            if (!saved.includes(q)) { saved.unshift(q); LS.set('queries', saved.slice(0, 20)); }
-            renderSaved();
+        const saveSql = sql => {
+            const saved = LS.get('sql') || [];
+            if (!saved.includes(sql)) { saved.unshift(sql); LS.set('sql', saved.slice(0, 20)); }
+            renderSavedSql();
         };
         
-        const renderSaved = () => {
-            const saved = LS.get('queries') || [];
-            $('savedQueries').innerHTML = saved.length ? saved.map((q, i) => 
+        const renderSavedSql = () => {
+            const saved = LS.get('sql') || [];
+            $('savedSql').innerHTML = saved.length ? saved.map((q, i) => 
                 `<div class="sub" style="margin-bottom:6px;display:flex;justify-content:space-between;cursor:default;">
-                    <span style="cursor:pointer;flex:1;" onclick="useQuery(${i})">${q.slice(0,50)}${q.length>50?'...':''}</span>
-                    <span class="x" onclick="delQuery(${i})">×</span>
+                    <span style="cursor:pointer;flex:1;" onclick="useSql(${i})">${q.slice(0,60)}${q.length>60?'...':''}</span>
+                    <span class="x" onclick="delSql(${i})">×</span>
                 </div>`
-            ).join('') : '<span style="color:var(--muted)">No saved queries</span>';
+            ).join('') : '<span style="color:var(--muted)">No saved SQL</span>';
         };
         
-        window.useQuery = i => { const q = (LS.get('queries') || [])[i]; if (q) { editor.setValue(q); } };
-        window.delQuery = i => { const saved = LS.get('queries') || []; saved.splice(i, 1); LS.set('queries', saved); renderSaved(); };
+        window.useSql = i => { const q = (LS.get('sql') || [])[i]; if (q) { editor.setValue(q); } };
+        window.delSql = i => { const saved = LS.get('sql') || []; saved.splice(i, 1); LS.set('sql', saved); renderSavedSql(); };
         
         $('saveSettings').onclick = () => { LS.set('natsUrl', $('natsUrl').value); log('Settings saved', 'ok'); };
-        $('clearSaved').onclick = () => { LS.set('queries', []); renderSaved(); };
+        $('clearSaved').onclick = () => { LS.set('sql', []); renderSavedSql(); };
         
         
         const switchTab = tab => {
@@ -329,7 +330,7 @@
         
         // Init
         loadSettings();
-        renderSaved();
+        renderSavedSql();
         setTimeout(() => $('connectBtn').click(), 500);
     </script>
 </body>
