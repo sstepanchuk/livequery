@@ -113,10 +113,10 @@ impl Config {
         Duration::from_secs(self.shutdown_timeout_secs)
     }
 
-    /// Subscription-specific events subject: livequery.{sub_id}.events
+    /// Subscription-specific changes subject: livequery.{sub_id}.changes
     #[inline]
     pub fn sub_events_subject(&self, sub_id: &str) -> String {
-        format!("{}.{}.events", self.nats_prefix, sub_id)
+        format!("{}.{}.changes", self.nats_prefix, sub_id)
     }
 
     /// Safe URL for logging (hides password)

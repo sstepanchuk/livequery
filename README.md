@@ -184,7 +184,7 @@ const latency = Date.now() - batch.ts; // ms from server to client
 | `livequery.{subscription_id}.subscribe` | Subscribe to query (request-reply) |
 | `livequery.{subscription_id}.unsubscribe` | Unsubscribe |
 | `livequery.{subscription_id}.heartbeat` | Keep-alive |
-| `livequery.{subscription_id}.events` | Receive updates (subscribe to this after registering) |
+| `livequery.{subscription_id}.changes` | Receive updates (subscribe to this after registering) |
 | `livequery.health` | Health check - returns server stats |
 
 ### Health Check

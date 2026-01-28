@@ -25,7 +25,7 @@ fn test_subscribe_response_format() {
     let response = json!({
         "success": true,
         "query_hash": 12345678901234u64,
-        "subject": "livequery.12345678901234.events",
+        "subject": "livequery.12345678901234.changes",
         "snapshot": [
             {
                 "mz_timestamp": 1706284800000i64,

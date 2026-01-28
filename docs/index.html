@@ -129,7 +129,7 @@ const res = await nats.request('livequery.orders.subscribe', {
 // Receive real-time updates
 const sub = nats.subscribe(res.subject);
 for await (const msg of sub) {
-  console.log('Changes:', JSON.parse(msg.data).events);
+  console.log('Update:', JSON.parse(msg.data));
 }</code></pre>
                 </div>
                 <div class="code-content" data-lang="python">

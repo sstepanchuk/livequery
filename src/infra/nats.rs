@@ -131,7 +131,7 @@ impl NatsHandler {
             Err(e) => return SubscribeResponse::err(&e),
         };
 
-        // Subject format: livequery.{subscription_id}.events
+        // Subject format: livequery.{subscription_id}.changes
         let subject = self.cfg.sub_events_subject(&sub_id);
         let sub_id = result.subscription_id.to_string();
 
