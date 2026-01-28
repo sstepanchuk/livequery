@@ -8,22 +8,22 @@
     <style>
         :root { --bg: #09090b; --card: #18181b; --border: #27272a; --text: #fafafa; --muted: #71717a; --accent: #10b981; --ok: #22c55e; --err: #ef4444; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font: 13px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+        body { font: 14px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         .app { display: flex; flex-direction: column; height: 100vh; }
         
         header { padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
-        .logo { font-weight: 700; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+        .logo { font-weight: 700; font-size: 16px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
         .logo::before { content: '⚡'; }
-        .status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .status.on { background: rgba(34,197,94,.15); color: var(--ok); }
         .status.off { background: rgba(239,68,68,.15); color: #fca5a5; }
-        .stats { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 16px; }
+        .stats { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; gap: 16px; }
         .stat { display: flex; align-items: center; gap: 4px; }
         .stat b { color: var(--text); font-weight: 600; }
         .stat.latency b { color: var(--accent); }
         
         nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); padding: 0 8px; }
-        nav button { padding: 10px 16px; font-size: 12px; font-weight: 500; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+        nav button { padding: 12px 18px; font-size: 13px; font-weight: 500; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
         nav button:hover { color: var(--text); }
         nav button.on { color: var(--accent); border-color: var(--accent); }
         
@@ -33,8 +33,8 @@
         
         input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; transition: border-color .15s; }
         input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
-        textarea { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; min-height: 80px; resize: vertical; }
-        label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+        textarea { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-height: 80px; resize: vertical; }
+        label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
         .field { margin-bottom: 16px; }
         .row { display: flex; gap: 12px; }
         .row > * { flex: 1; }
@@ -49,16 +49,16 @@
         button:disabled { opacity: .5; pointer-events: none; }
         
         .data { flex: 1; overflow: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--card); }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; background: var(--card); }
-        td { font-family: 'SF Mono', monospace; font-size: 11px; }
+        th { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; background: var(--card); }
+        td { font-family: 'SF Mono', monospace; font-size: 12px; }
         tr:hover td { background: rgba(255,255,255,.02); }
         .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
         .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: .5; }
-        .empty-text { font-size: 13px; }
+        .empty-text { font-size: 14px; }
         
-        .log { flex: 1; font-family: 'SF Mono', monospace; font-size: 11px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
+        .log { flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
         .log-entry { padding: 4px 0; display: flex; gap: 12px; }
         .log-entry + .log-entry { border-top: 1px solid var(--border); }
         .log .t { color: var(--muted); flex-shrink: 0; }
@@ -68,17 +68,17 @@
         .log-header h3 { font-size: 12px; font-weight: 600; color: var(--muted); }
         
         .subs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 32px; }
-        .sub { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all .15s; }
+        .sub { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; transition: all .15s; }
         .sub:hover { border-color: var(--muted); }
         .sub.on { border-color: var(--ok); background: rgba(34,197,94,.05); }
-        .sub .mode { font-size: 9px; padding: 2px 6px; background: var(--border); border-radius: 4px; color: var(--muted); text-transform: uppercase; }
+        .sub .mode { font-size: 10px; padding: 2px 6px; background: var(--border); border-radius: 4px; color: var(--muted); text-transform: uppercase; }
         .sub .x { color: var(--err); cursor: pointer; font-size: 14px; line-height: 1; }
         .sub .x:hover { color: #f87171; }
         
         .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-        .actions button { font-size: 12px; padding: 8px 12px; }
+        .actions button { font-size: 13px; padding: 10px 14px; }
         
-        .result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 6px; font-size: 12px; }
+        .result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 6px; font-size: 13px; }
         .result.ok { border-left: 3px solid var(--ok); color: var(--ok); }
         .result.err { border-left: 3px solid var(--err); color: var(--err); }
     </style>
