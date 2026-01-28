@@ -9,6 +9,7 @@
     <meta property="og:description" content="Real-time SQL subscriptions for PostgreSQL via NATS">
     <meta property="og:type" content="website">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
     <style>
         :root { --bg: #0a0a0a; --text: #fafafa; --muted: #71717a; --accent: #10b981; --card: #18181b; --border: #27272a; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -36,15 +37,15 @@
         section { padding: 80px 0; }
         h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: 32px; letter-spacing: -0.5px; }
         
-        .code-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-        .code-header { padding: 12px 20px; background: rgba(0,0,0,.3); border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-        .code-header::before { content: ''; display: flex; gap: 6px; }
-        .code-header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
-        .code { padding: 24px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.7; overflow-x: auto; }
-        .code .c { color: #52525b; font-style: italic; }
-        .code .k { color: #a78bfa; }
-        .code .s { color: var(--accent); }
-        .code .f { color: #fbbf24; }
+        .code-block { background: #1d1f21; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .code-tabs { display: flex; background: rgba(0,0,0,.4); border-bottom: 1px solid var(--border); }
+        .code-tab { padding: 12px 20px; font-size: 13px; color: var(--muted); cursor: pointer; border: none; background: none; transition: all .2s; border-bottom: 2px solid transparent; }
+        .code-tab:hover { color: var(--text); }
+        .code-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(16,185,129,.05); }
+        .code-content { display: none; }
+        .code-content.active { display: block; }
+        .code-block pre { margin: 0; padding: 24px; font-size: 13px; line-height: 1.7; overflow-x: auto; }
+        .code-block code { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
         
         .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         .feature { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color .2s; }
@@ -100,20 +101,73 @@
         <section>
             <h2>Quick Start</h2>
             <div class="code-block">
-                <div class="code-header">
-                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-                    <span style="margin-left: 12px;">JavaScript</span>
+                <div class="code-tabs">
+                    <button class="code-tab active" data-lang="js">JavaScript</button>
+                    <button class="code-tab" data-lang="python">Python</button>
+                    <button class="code-tab" data-lang="go">Go</button>
+                    <button class="code-tab" data-lang="rust">Rust</button>
                 </div>
-                <pre class="code"><span class="c">// Subscribe to a query</span>
-<span class="k">const</span> res = <span class="k">await</span> nats.<span class="f">request</span>(<span class="s">'livequery.orders.subscribe'</span>, {
-  query: <span class="s">"SELECT * FROM orders WHERE status = 'pending'"</span>,
-  mode: <span class="s">'events'</span>
+                <div class="code-content active" data-lang="js">
+                    <pre><code class="language-javascript">// Subscribe to a query
+const res = await nats.request('livequery.orders.subscribe', {
+  query: "SELECT * FROM orders WHERE status = 'pending'",
+  mode: 'events'
 });
 
-<span class="c">// Receive real-time updates</span>
-nats.<span class="f">subscribe</span>(res.subject, (msg) =&gt; {
-  console.<span class="f">log</span>(<span class="s">'Changes:'</span>, msg.events);
-});</pre>
+// Receive real-time updates
+const sub = nats.subscribe(res.subject);
+for await (const msg of sub) {
+  console.log('Changes:', JSON.parse(msg.data).events);
+}</code></pre>
+                </div>
+                <div class="code-content" data-lang="python">
+                    <pre><code class="language-python">import nats
+import json
+
+# Subscribe to a query
+nc = await nats.connect("nats://localhost:4222")
+res = await nc.request("livequery.orders.subscribe", json.dumps({
+    "query": "SELECT * FROM orders WHERE status = 'pending'",
+    "mode": "events"
+}).encode())
+data = json.loads(res.data)
+
+# Receive real-time updates
+async for msg in nc.subscribe(data["subject"]):
+    print("Changes:", json.loads(msg.data)["events"])</code></pre>
+                </div>
+                <div class="code-content" data-lang="go">
+                    <pre><code class="language-go">// Subscribe to a query
+nc, _ := nats.Connect("nats://localhost:4222")
+res, _ := nc.Request("livequery.orders.subscribe", []byte(`{
+  "query": "SELECT * FROM orders WHERE status = 'pending'",
+  "mode": "events"
+}`), time.Second*10)
+
+var resp struct{ Subject string }
+json.Unmarshal(res.Data, &resp)
+
+// Receive real-time updates
+nc.Subscribe(resp.Subject, func(msg *nats.Msg) {
+    fmt.Println("Changes:", string(msg.Data))
+})</code></pre>
+                </div>
+                <div class="code-content" data-lang="rust">
+                    <pre><code class="language-rust">// Subscribe to a query
+let nc = async_nats::connect("nats://localhost:4222").await?;
+let res = nc.request("livequery.orders.subscribe", r#"{
+  "query": "SELECT * FROM orders WHERE status = 'pending'",
+  "mode": "events"
+}"#.into()).await?;
+
+let data: serde_json::Value = serde_json::from_slice(&res.payload)?;
+
+// Receive real-time updates
+let mut sub = nc.subscribe(data["subject"].as_str().unwrap()).await?;
+while let Some(msg) = sub.next().await {
+    println!("Changes: {:?}", msg.payload);
+}</code></pre>
+                </div>
             </div>
         </section>
         
@@ -170,6 +224,11 @@ nats.<span class="f">subscribe</span>(res.subject, (msg) =&gt; {
         </div>
     </footer>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
     <script>
         function copy(id) {
             const text = document.getElementById(id).textContent;
@@ -177,6 +236,18 @@ nats.<span class="f">subscribe</span>(res.subject, (msg) =&gt; {
             event.target.textContent = 'Copied!';
             setTimeout(() => event.target.textContent = 'Copy', 1500);
         }
+        
+        // Language tabs
+        document.querySelectorAll('.code-tab').forEach(tab => {
+            tab.onclick = () => {
+                const lang = tab.dataset.lang;
+                const block = tab.closest('.code-block');
+                block.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+                block.querySelectorAll('.code-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                block.querySelector(`.code-content[data-lang="${lang}"]`).classList.add('active');
+            };
+        });
     </script>
 </body>
 </html>
