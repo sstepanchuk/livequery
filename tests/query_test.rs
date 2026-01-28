@@ -45,7 +45,7 @@ fn test_multiple_joins() {
 fn test_subquery() {
     let a = analyze("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)");
     assert!(a.is_valid);
-    assert!(a.tables.len() >= 1);
+    assert!(!a.tables.is_empty());
     assert!(a.tables.contains(&"users".to_string()));
 }
 
