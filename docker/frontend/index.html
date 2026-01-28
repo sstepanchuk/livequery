@@ -99,6 +99,7 @@
             <button data-tab="subscribe">Subscribe</button>
             <button data-tab="sql">SQL</button>
             <button data-tab="log">Log</button>
+            <button data-tab="settings">Settings</button>
         </nav>
         
         <main>
@@ -160,10 +161,24 @@
                 </div>
                 <div class="log" id="log"></div>
             </div>
+            
+            <div class="panel" id="settingsPanel">
+                <div class="field">
+                    <label>NATS WebSocket URL</label>
+                    <input type="text" id="natsUrl" value="ws://localhost:9222" placeholder="ws://localhost:9222">
+                </div>
+                <button class="primary" id="saveSettings">Save Settings</button>
+                
+                <div style="margin-top:32px;">
+                    <div class="log-header">
+                        <h3>Saved Queries</h3>
+                        <button class="ghost" id="clearSaved" style="padding:6px 10px;font-size:11px;">Clear All</button>
+                    </div>
+                    <div id="savedQueries" style="margin-top:12px;"></div>
+                </div>
+            </div>
         </main>
     </div>
-    
-    <input type="hidden" id="natsUrl" value="ws://localhost:9222">
 
     <script type="module">
         import { connect, StringCodec } from 'https://unpkg.com/nats.ws@1.30.3/esm/nats.js';
@@ -268,6 +283,43 @@
         $('preset').onchange = e => $('query').value = e.target.value;
         $('clearLog').onclick = () => $('log').innerHTML = '';
         
+        // localStorage
+        const LS = {
+            get: k => { try { return JSON.parse(localStorage.getItem('lq_' + k)); } catch { return null; } },
+            set: (k, v) => localStorage.setItem('lq_' + k, JSON.stringify(v))
+        };
+        
+        const loadSettings = () => {
+            const url = LS.get('natsUrl');
+            if (url) $('natsUrl').value = url;
+        };
+        
+        const saveQuery = q => {
+            const saved = LS.get('queries') || [];
+            if (!saved.includes(q)) { saved.unshift(q); LS.set('queries', saved.slice(0, 20)); }
+            renderSaved();
+        };
+        
+        const renderSaved = () => {
+            const saved = LS.get('queries') || [];
+            $('savedQueries').innerHTML = saved.length ? saved.map((q, i) => 
+                `<div class="sub" style="margin-bottom:6px;display:flex;justify-content:space-between;cursor:default;">
+                    <span style="cursor:pointer;flex:1;" onclick="useQuery(${i})">${q.slice(0,50)}${q.length>50?'...':''}</span>
+                    <span class="x" onclick="delQuery(${i})">×</span>
+                </div>`
+            ).join('') : '<span style="color:var(--muted)">No saved queries</span>';
+        };
+        
+        window.useQuery = i => { const q = (LS.get('queries') || [])[i]; if (q) { $('query').value = q; switchTab('subscribe'); } };
+        window.delQuery = i => { const saved = LS.get('queries') || []; saved.splice(i, 1); LS.set('queries', saved); renderSaved(); };
+        
+        $('saveSettings').onclick = () => { LS.set('natsUrl', $('natsUrl').value); log('Settings saved', 'ok'); };
+        $('clearSaved').onclick = () => { LS.set('queries', []); renderSaved(); };
+        
+        // Save query on subscribe
+        const origSubBtn = $('subBtn').onclick;
+        $('subBtn').onclick = async () => { saveQuery($('query').value.trim()); await origSubBtn(); };
+        
         const switchTab = tab => {
             document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
@@ -277,6 +329,9 @@
         
         setInterval(() => { if (nc) subs.forEach((_, id) => nc.request(`livequery.${id}.heartbeat`, sc.encode('{}'), {timeout:5000}).catch(() => {})); }, 15000);
         
+        // Init
+        loadSettings();
+        renderSaved();
         setTimeout(() => $('connectBtn').click(), 500);
     </script>
 </body>

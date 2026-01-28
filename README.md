@@ -60,15 +60,18 @@ cargo build --release
 
 ## Quick Start
 
-### Demo Image (Easiest)
+### Test UI Image
 
-All-in-one image with PostgreSQL, NATS, LiveQuery, and test UI:
+Test UI with LiveQuery server (requires your PostgreSQL and NATS):
 
 ```bash
-docker run -p 3000:3000 -p 9222:9222 ghcr.io/sstepanchuk/livequery-demo
+docker run -p 3000:3000 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/db \
+  -e NATS_URL=nats://host:4222 \
+  ghcr.io/sstepanchuk/livequery-demo
 ```
 
-Open http://localhost:3000 — ready to test.
+Open http://localhost:3000 — configure NATS WebSocket URL in Settings tab.
 
 ### Docker Compose
 
