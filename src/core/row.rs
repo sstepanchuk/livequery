@@ -84,15 +84,18 @@ impl RowData {
         if let Some(idx) = self.col_idx.get() {
             return idx.get(name).and_then(|&i| self.values.get(i));
         }
-        // For small rows (<=8 cols), linear search is faster than building/using hash index
-        if self.cols.len() <= 8 {
+
+        let len = self.cols.len();
+        // For small rows (<=6 cols), linear search is faster
+        if len <= 6 {
             return self
                 .cols
                 .iter()
                 .position(|c| c.as_ref() == name)
                 .and_then(|i| self.values.get(i));
         }
-        // Build index once for wider rows
+
+        // Build index once for wider rows (>6 cols)
         let idx = self
             .col_idx
             .get_or_init(|| Arc::new(build_col_index(&self.cols)));

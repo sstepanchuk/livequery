@@ -72,23 +72,11 @@ impl NatsHandler {
                 }
                 Some(m) = sub_unsubscribe.next() => {
                     self.msgs_in.fetch_add(1, Relaxed);
-                    let sub_id = sub_id_from_subject(&self.cfg.nats_prefix, m.subject.as_str(), "unsubscribe");
-                    if let Some(id) = sub_id {
-                        let ok = self.subs.unsubscribe(id);
-                        self.reply(&m.reply, &serde_json::json!({"success": ok})).await;
-                    } else {
-                        self.reply(&m.reply, &serde_json::json!({"success": false, "error": "Missing subscription_id in subject"})).await;
-                    }
+                    self.handle_simple_action(&m, "unsubscribe", |id| self.subs.unsubscribe(id)).await;
                 }
                 Some(m) = sub_heartbeat.next() => {
                     self.msgs_in.fetch_add(1, Relaxed);
-                    let sub_id = sub_id_from_subject(&self.cfg.nats_prefix, m.subject.as_str(), "heartbeat");
-                    if let Some(id) = sub_id {
-                        let ok = self.subs.heartbeat(id);
-                        self.reply(&m.reply, &serde_json::json!({"success": ok})).await;
-                    } else {
-                        self.reply(&m.reply, &serde_json::json!({"success": false, "error": "Missing subscription_id in subject"})).await;
-                    }
+                    self.handle_simple_action(&m, "heartbeat", |id| self.subs.heartbeat(id)).await;
                 }
                 Some(m) = sub_health.next() => {
                     self.msgs_in.fetch_add(1, Relaxed);
@@ -105,6 +93,19 @@ impl NatsHandler {
                 }
             }
         }
+    }
+
+    async fn handle_simple_action<F>(&self, msg: &async_nats::Message, action: &str, f: F)
+    where
+        F: FnOnce(&str) -> bool,
+    {
+        let sub_id = sub_id_from_subject(&self.cfg.nats_prefix, msg.subject.as_str(), action);
+        let response = if let Some(id) = sub_id {
+            serde_json::json!({"success": f(id)})
+        } else {
+            serde_json::json!({"success": false, "error": "Missing subscription_id in subject"})
+        };
+        self.reply(&msg.reply, &response).await;
     }
 
     async fn on_subscribe(

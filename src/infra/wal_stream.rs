@@ -116,6 +116,7 @@ impl WalStreamer {
 
         let mut tx: FxHashMap<Arc<str>, Vec<RowData>> = FxHashMap::default();
         let mut in_tx = false;
+        let mut last_lsn = None;
 
         while let Some(event) = client.recv().await? {
             match event {
@@ -129,44 +130,43 @@ impl WalStreamer {
                                 tx.clear();
                             }
                             WalChange::Commit => {
-                                if !tx.is_empty() {
-                                    self.process(&tx, subs, nats).await;
-                                    tx.clear();
-                                }
                                 in_tx = false;
-                                client.update_applied_lsn(wal_end);
+                                last_lsn = Some(wal_end);
                             }
                             WalChange::Insert { rel, row } | WalChange::Update { rel, row } => {
                                 if let Some(t) = self.decoder.get_table(rel)
-                                    && subs.has_table(t)
+                                    && subs.has_table(t.as_ref())
                                 {
-                                    tx.entry(Arc::from(t)).or_default().push(row);
+                                    tx.entry(t).or_default().push(row);
                                 }
                             }
                             WalChange::Delete { rel } => {
                                 if let Some(t) = self.decoder.get_table(rel)
-                                    && subs.has_table(t)
+                                    && subs.has_table(t.as_ref())
                                 {
-                                    tx.entry(Arc::from(t)).or_default();
+                                    tx.entry(t).or_default();
                                 }
                             }
                             WalChange::Truncate { rels } => {
                                 for r in rels {
                                     if let Some(t) = self.decoder.get_table(r)
-                                        && subs.has_table(t)
+                                        && subs.has_table(t.as_ref())
                                     {
-                                        tx.entry(Arc::from(t)).or_default();
+                                        tx.entry(t).or_default();
                                     }
                                 }
                             }
-                            WalChange::Other => {}
+                            _ => {}
                         }
                     }
 
+                    // Process accumulated changes when transaction ends
                     if !in_tx && !tx.is_empty() {
                         self.process(&tx, subs, nats).await;
                         tx.clear();
-                        client.update_applied_lsn(wal_end);
+                        if let Some(lsn) = last_lsn.take() {
+                            client.update_applied_lsn(lsn);
+                        }
                     }
                 }
                 ReplicationEvent::KeepAlive { .. } => trace!("keepalive"),

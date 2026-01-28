@@ -114,100 +114,90 @@ impl SubscriptionManager {
         cols: Option<Vec<String>>,
         mode: SubscriptionMode,
     ) -> Result<SubscribeResult, String> {
-        // Atomic check-and-insert for subscription
-        let sub_id: Arc<str> = sub_id.into();
-        match self.subs.entry(sub_id.clone()) {
-            Entry::Occupied(_) => Err(format!("Subscription '{}' already exists", sub_id)),
-            Entry::Vacant(entry) => {
-                if self.subs_count.load(Relaxed) >= self.max_subs {
-                    return Err("Max subscriptions reached".into());
-                }
-
-                // Analyze query
-                let a = query::analyze(q);
-                if !a.is_valid {
-                    return Err(a.error.unwrap_or_else(|| "Invalid query".into()));
-                }
-                if a.tables.is_empty() {
-                    return Err("No table in query".into());
-                }
-
-                let query_id: Arc<str> = qhash(q).into();
-
-                // Atomic get-or-create SharedQuery
-                let is_new_query = match self.queries.entry(query_id.clone()) {
-                    Entry::Occupied(qe) => {
-                        // Existing query - increment refcount atomically
-                        qe.get().refcount.fetch_add(1, Relaxed);
-                        qe.get().subscribers.write().insert(sub_id.clone());
-                        info!("+Sub [{}] → Q{}", sub_id, &query_id[..8]);
-                        false
-                    }
-                    Entry::Vacant(qe) => {
-                        // New query
-                        let cols_arc = cols.map(|c| {
-                            Arc::from(
-                                c.into_iter()
-                                    .map(|s| Arc::<str>::from(s.as_str()))
-                                    .collect::<Vec<_>>()
-                                    .into_boxed_slice(),
-                            )
-                        });
-
-                        // Index by tables
-                        for t in &a.tables {
-                            self.table_idx
-                                .entry(Arc::<str>::from(t.as_str()))
-                                .or_default()
-                                .insert(query_id.clone());
-                        }
-
-                        let mut subscribers = FxHashSet::default();
-                        subscribers.insert(sub_id.clone());
-
-                        qe.insert(SharedQuery {
-                            query: q.into(),
-                            cols: cols_arc,
-                            tables: Arc::from(a.tables.into_boxed_slice()),
-                            filter: a.filter,
-                            is_simple: a.is_simple,
-                            snap: RwLock::new(Snapshot::new()),
-                            seq: AtomicU64::new(0),
-                            refcount: AtomicUsize::new(1),
-                            subscribers: RwLock::new(subscribers),
-                        });
-                        info!("New query Q{} + sub [{}]", &query_id[..8], sub_id);
-                        true
-                    }
-                };
-
-                // Create subscription (already in vacant entry)
-                entry.insert(Subscription {
-                    id: sub_id.clone(),
-                    query_id: query_id.clone(),
-                    mode,
-                    last_activity: RwLock::new(Instant::now()),
-                });
-                self.subs_count.fetch_add(1, Relaxed);
-
-                // Avoid double lookup: seq is 0 for new queries, fetch from existing
-                let seq = if is_new_query {
-                    0
-                } else {
-                    self.queries
-                        .get(&query_id)
-                        .map(|q| q.seq.load(Relaxed))
-                        .unwrap_or(0)
-                };
-
-                Ok(SubscribeResult {
-                    subscription_id: sub_id,
-                    query_id,
-                    is_new_query,
-                    seq,
-                })
-            }
+        // Check limit before analysis
+        if self.subs_count.load(Relaxed) >= self.max_subs {
+            return Err("Max subscriptions reached".into());
         }
+
+        // Analyze query once
+        let a = query::analyze(q);
+        if !a.is_valid {
+            return Err(a.error.unwrap_or_else(|| "Invalid query".into()));
+        }
+        if a.tables.is_empty() {
+            return Err("No table in query".into());
+        }
+
+        let sub_id: Arc<str> = sub_id.into();
+        let query_id: Arc<str> = qhash(q).into();
+
+        // Atomic check-and-insert for subscription
+        let entry = match self.subs.entry(sub_id.clone()) {
+            Entry::Occupied(_) => return Err(format!("Subscription '{}' already exists", sub_id)),
+            Entry::Vacant(e) => e,
+        };
+
+        // Get or create SharedQuery
+        let (is_new_query, seq) = match self.queries.entry(query_id.clone()) {
+            Entry::Occupied(qe) => {
+                let q = qe.get();
+                q.refcount.fetch_add(1, Relaxed);
+                q.subscribers.write().insert(sub_id.clone());
+                info!("+Sub [{}] → Q{}", sub_id, &query_id[..8]);
+                (false, q.seq.load(Relaxed))
+            }
+            Entry::Vacant(qe) => {
+                let cols_arc = cols.map(|c| {
+                    Arc::from(
+                        c.into_iter()
+                            .map(|s| Arc::<str>::from(s.as_str()))
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    )
+                });
+
+                // Index by tables
+                for t in &a.tables {
+                    self.table_idx
+                        .entry(Arc::<str>::from(t.as_str()))
+                        .or_default()
+                        .insert(query_id.clone());
+                }
+
+                let mut subscribers = FxHashSet::default();
+                subscribers.insert(sub_id.clone());
+
+                qe.insert(SharedQuery {
+                    query: q.into(),
+                    cols: cols_arc,
+                    tables: Arc::from(a.tables.into_boxed_slice()),
+                    filter: a.filter,
+                    is_simple: a.is_simple,
+                    snap: RwLock::new(Snapshot::new()),
+                    seq: AtomicU64::new(0),
+                    refcount: AtomicUsize::new(1),
+                    subscribers: RwLock::new(subscribers),
+                });
+                info!("New query Q{} + sub [{}]", &query_id[..8], sub_id);
+                (true, 0)
+            }
+        };
+
+        // Insert subscription
+        entry.insert(Subscription {
+            id: sub_id.clone(),
+            query_id: query_id.clone(),
+            mode,
+            last_activity: RwLock::new(Instant::now()),
+        });
+        self.subs_count.fetch_add(1, Relaxed);
+
+        Ok(SubscribeResult {
+            subscription_id: sub_id,
+            query_id,
+            is_new_query,
+            seq,
+        })
     }
 
     /// Unsubscribe by subscription_id (atomic with refcount)
@@ -224,21 +214,21 @@ impl SubscriptionManager {
             // Atomic decrement - only remove if we hit zero
             if sq.refcount.fetch_sub(1, Relaxed) == 1 {
                 drop(sq);
-                self.remove_query(&sub.query_id);
+                self.remove_query(sub.query_id.clone());
             }
         }
         true
     }
 
-    fn remove_query(&self, query_id: &str) {
+    fn remove_query(&self, query_id: Arc<str>) {
         // Double-check refcount is still zero before removal (handles race)
-        if let Entry::Occupied(e) = self.queries.entry(query_id.into())
+        if let Entry::Occupied(e) = self.queries.entry(query_id.clone())
             && e.get().refcount.load(Relaxed) == 0
         {
             let sq = e.remove();
             for t in sq.tables.iter() {
                 if let Some(mut x) = self.table_idx.get_mut(t.as_str()) {
-                    x.remove(query_id);
+                    x.remove(&query_id);
                 }
             }
             info!("~Query Q{}", &query_id[..8]);

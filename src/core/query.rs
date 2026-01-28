@@ -92,9 +92,13 @@ pub fn analyze(q: &str) -> QueryAnalysis {
     // Slow path: parse and cache
     let result = analyze_inner(q);
     if result.is_valid {
-        // Evict random entries if cache is full (simple LRU alternative)
-        if CACHE.len() >= 1000 {
-            let to_remove: Vec<u64> = CACHE.iter().take(100).map(|e| *e.key()).collect();
+        // Simple cache size management - evict 10% when full
+        const MAX_CACHE: usize = 1000;
+        const EVICT_COUNT: usize = 100;
+
+        if CACHE.len() >= MAX_CACHE {
+            // Evict oldest entries (first 10%)
+            let to_remove: Vec<u64> = CACHE.iter().take(EVICT_COUNT).map(|e| *e.key()).collect();
             for k in to_remove {
                 CACHE.remove(&k);
             }

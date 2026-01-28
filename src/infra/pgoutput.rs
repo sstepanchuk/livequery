@@ -46,8 +46,8 @@ impl PgOutputDecoder {
     }
 
     #[inline]
-    pub fn get_table(&self, rel: u32) -> Option<&str> {
-        self.rels.get(&rel).map(|r| r.table.as_ref())
+    pub fn get_table(&self, rel: u32) -> Option<Arc<str>> {
+        self.rels.get(&rel).map(|r| r.table.clone())
     }
 
     /// Decode pgoutput binary message - optimized hot path
