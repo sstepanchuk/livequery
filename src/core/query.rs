@@ -192,7 +192,9 @@ fn extract_factor(f: &TableFactor, t: &mut Vec<String>, has_subq: &mut bool) {
     match f {
         TableFactor::Table { name, .. } => {
             if let Some(i) = name.0.last() {
-                t.push(i.value.to_lowercase());
+                if let Some(ident) = i.as_ident() {
+                    t.push(ident.value.to_lowercase());
+                }
             }
         }
         TableFactor::Derived { subquery, .. } => {
@@ -327,7 +329,7 @@ fn col_name(e: &Expr) -> Option<Box<str>> {
 
 fn parse_value(e: &Expr) -> Option<FilterValue> {
     match e {
-        Expr::Value(v) => match v {
+        Expr::Value(v) => match &v.value {
             sqlparser::ast::Value::Null => Some(FilterValue::Null),
             sqlparser::ast::Value::Boolean(b) => Some(FilterValue::Bool(*b)),
             sqlparser::ast::Value::Number(n, _) => {
