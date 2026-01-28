@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveQuery - Real-time SQL for PostgreSQL</title>
+    <meta name="description" content="Subscribe to SQL queries, get live updates. Real-time PostgreSQL streaming via NATS.">
+    <style>
+        :root { --bg: #0a0a0a; --text: #fafafa; --muted: #888; --accent: #0af; --card: #111; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font: 16px/1.6 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+        
+        .container { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+        
+        header { padding: 80px 0 60px; text-align: center; }
+        h1 { font-size: 3rem; font-weight: 700; letter-spacing: -1px; margin-bottom: 16px; }
+        h1 span { color: var(--accent); }
+        .tagline { font-size: 1.25rem; color: var(--muted); max-width: 500px; margin: 0 auto 32px; }
+        
+        .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px; }
+        .badges a { display: inline-block; }
+        .badges img { height: 20px; }
+        
+        .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn { padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; transition: opacity .2s; }
+        .btn:hover { opacity: .8; }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-secondary { background: #222; color: var(--text); }
+        
+        section { padding: 60px 0; border-top: 1px solid #222; }
+        h2 { font-size: 1.5rem; margin-bottom: 24px; }
+        
+        .code { background: var(--card); border-radius: 8px; padding: 20px; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; overflow-x: auto; line-height: 1.5; }
+        .code .c { color: #666; }
+        .code .k { color: var(--accent); }
+        .code .s { color: #0c6; }
+        .code .n { color: #f80; }
+        
+        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; }
+        .feature { background: var(--card); border-radius: 8px; padding: 24px; }
+        .feature h3 { font-size: 1rem; margin-bottom: 8px; }
+        .feature p { font-size: 14px; color: var(--muted); }
+        
+        .install { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .install-option { background: var(--card); border-radius: 8px; padding: 20px; }
+        .install-option h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .install-option code { display: block; font-size: 13px; color: var(--accent); word-break: break-all; }
+        
+        footer { padding: 40px 0; text-align: center; color: var(--muted); font-size: 14px; border-top: 1px solid #222; }
+        footer a { color: var(--text); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        
+        @media (max-width: 600px) {
+            header { padding: 60px 0 40px; }
+            h1 { font-size: 2rem; }
+            .tagline { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Live<span>Query</span></h1>
+            <p class="tagline">Real-time SQL subscriptions for PostgreSQL. Subscribe to queries, get live updates via NATS.</p>
+            
+            <div class="badges">
+                <a href="https://github.com/sstepanchuk/livequery/actions"><img src="https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+                <a href="https://github.com/sstepanchuk/livequery/releases"><img src="https://img.shields.io/github/v/release/sstepanchuk/livequery?color=0af" alt="Release"></a>
+                <a href="https://github.com/sstepanchuk/livequery/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
+            </div>
+            
+            <div class="cta">
+                <a href="https://github.com/sstepanchuk/livequery" class="btn btn-primary">GitHub</a>
+                <a href="https://github.com/sstepanchuk/livequery/releases" class="btn btn-secondary">Download</a>
+            </div>
+        </header>
+        
+        <section>
+            <h2>Quick Example</h2>
+            <div class="code">
+<span class="c">// Subscribe to pending orders</span>
+<span class="k">const</span> res = <span class="k">await</span> nats.request(<span class="s">'livequery.orders.subscribe'</span>, {
+  subscription_id: <span class="s">'orders'</span>,
+  query: <span class="s">'SELECT * FROM orders WHERE status = \'pending\''</span>,
+  mode: <span class="s">'events'</span>
+});
+
+<span class="c">// Receive live updates</span>
+nats.subscribe(res.subject, (msg) => {
+  console.log(<span class="s">'Update:'</span>, msg.events);
+});
+            </div>
+        </section>
+        
+        <section>
+            <h2>Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <h3>Plain SQL</h3>
+                    <p>No new languages. Write standard SQL queries and subscribe to their results.</p>
+                </div>
+                <div class="feature">
+                    <h3>Low Latency</h3>
+                    <p>Native PostgreSQL WAL streaming. Sub-10ms change detection.</p>
+                </div>
+                <div class="feature">
+                    <h3>Shared Queries</h3>
+                    <p>Identical queries share one snapshot. Efficient memory usage at scale.</p>
+                </div>
+                <div class="feature">
+                    <h3>Two Modes</h3>
+                    <p>Events mode for differential updates. Snapshot mode for full data.</p>
+                </div>
+            </div>
+        </section>
+        
+        <section>
+            <h2>Install</h2>
+            <div class="install">
+                <div class="install-option">
+                    <h3>Docker</h3>
+                    <code>docker pull ghcr.io/sstepanchuk/livequery:latest</code>
+                </div>
+                <div class="install-option">
+                    <h3>Binary</h3>
+                    <code>curl -LO https://github.com/sstepanchuk/livequery/releases/latest/download/livequery-linux-x86_64.tar.gz</code>
+                </div>
+                <div class="install-option">
+                    <h3>Source</h3>
+                    <code>cargo install --git https://github.com/sstepanchuk/livequery</code>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>MIT License · <a href="https://github.com/sstepanchuk/livequery">GitHub</a> · Built with Rust</p>
+        </div>
+    </footer>
+</body>
+</html>
