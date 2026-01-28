@@ -3,214 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiveQuery Test</title>
+    <title>LiveQuery</title>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --success: #22c55e; --error: #ef4444; --warning: #f59e0b; --purple: #a855f7; }
+        :root { --bg: #111; --card: #1a1a1a; --border: #333; --text: #eee; --muted: #888; --accent: #0af; --ok: #0c6; --err: #f44; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; font-size: 11px; }
-        
+        body { font: 12px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         .app { display: flex; flex-direction: column; height: 100vh; }
         
-        /* Compact header */
-        .header { padding: 4px 8px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-        .logo { font-size: 12px; font-weight: 700; color: var(--accent); }
-        .status { padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 600; }
-        .status.connected { background: #166534; color: #4ade80; }
-        .status.disconnected { background: #7f1d1d; color: #fca5a5; }
-        .status.connecting { background: #854d0e; color: #fcd34d; }
-        .stats-bar { display: flex; gap: 8px; margin-left: auto; font-size: 10px; }
-        .stat-item { display: flex; gap: 3px; align-items: center; }
-        .stat-item .v { font-weight: 700; }
-        .stat-item .v.accent { color: var(--accent); }
-        .stat-item .v.success { color: var(--success); }
-        .stat-item .v.warning { color: var(--warning); }
-        .stat-item .v.purple { color: var(--purple); }
+        header { padding: 6px 10px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .logo { font-weight: 700; color: var(--accent); }
+        .status { padding: 2px 8px; border-radius: 10px; font-size: 10px; }
+        .status.on { background: #041; color: #0c6; }
+        .status.off { background: #400; color: #f66; }
+        .stats { margin-left: auto; font-size: 11px; color: var(--muted); }
+        .stats b { color: var(--text); margin-right: 2px; }
         
-        /* Tabs for controls */
-        .tabs-nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-        .tab-btn { padding: 6px 10px; font-size: 10px; cursor: pointer; color: var(--muted); background: transparent; border: none; border-bottom: 2px solid transparent; }
-        .tab-btn:hover { color: var(--text); }
-        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); }
+        nav button { padding: 8px 12px; font-size: 11px; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+        nav button:hover { color: var(--text); }
+        nav button.on { color: var(--accent); border-color: var(--accent); }
         
-        /* Main content area */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .panel { display: none; padding: 10px; overflow: auto; }
+        .panel.on { display: block; }
         
-        /* Controls panel - collapsible */
-        .controls { background: var(--card); padding: 6px; border-bottom: 1px solid var(--border); display: none; flex-shrink: 0; max-height: 40vh; overflow-y: auto; }
-        .controls.active { display: block; }
-        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+        input, select, textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; }
+        textarea { font-family: monospace; font-size: 11px; min-height: 60px; resize: vertical; }
+        label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+        .field { margin-bottom: 10px; }
+        .row { display: flex; gap: 10px; }
+        .row > * { flex: 1; }
         
-        input, select, textarea { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 10px; font-family: inherit; }
-        textarea { resize: none; min-height: 40px; font-family: monospace; font-size: 9px; }
+        button { padding: 6px 12px; border: none; border-radius: 4px; font: inherit; cursor: pointer; }
+        .primary { background: var(--accent); color: #000; }
+        .success { background: var(--ok); color: #000; }
+        .ghost { background: none; border: 1px solid var(--border); color: var(--muted); }
+        .ghost:hover { background: var(--border); }
+        button:disabled { opacity: .5; }
         
-        .input-group { margin-bottom: 4px; }
-        .input-group label { display: block; font-size: 9px; color: var(--muted); margin-bottom: 2px; }
+        .data { flex: 1; overflow: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-size: 10px; text-transform: uppercase; position: sticky; top: 0; background: var(--bg); }
+        td { font-family: monospace; }
+        .empty { color: var(--muted); text-align: center; padding: 40px; }
         
-        .btn { padding: 4px 8px; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-danger { background: var(--error); color: white; }
-        .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-        .btn-ghost:hover { background: var(--border); }
-        .btn:disabled { opacity: 0.5; }
+        .log { font-family: monospace; font-size: 11px; }
+        .log div { padding: 3px 0; border-bottom: 1px solid #222; }
+        .log .t { color: var(--muted); margin-right: 8px; }
+        .log .ok { color: var(--ok); }
+        .log .err { color: var(--err); }
         
-        .actions-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
-        .actions-row .btn { font-size: 9px; padding: 3px 6px; }
+        .subs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+        .sub { padding: 4px 8px; background: var(--card); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; cursor: pointer; }
+        .sub.on { border-color: var(--ok); }
+        .sub .x { color: var(--err); margin-left: 6px; }
         
-        /* Data panels */
-        .panels { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-        .panel-header { padding: 4px 8px; background: rgba(0,0,0,0.2); font-weight: 600; font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        .panel-content { flex: 1; overflow: auto; padding: 4px; font-size: 10px; }
-        
-        /* Table */
-        table { width: 100%; border-collapse: collapse; font-size: 9px; }
-        th, td { padding: 3px 5px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-        th { color: var(--muted); font-weight: 500; font-size: 8px; text-transform: uppercase; position: sticky; top: 0; background: var(--bg); }
-        td { font-family: monospace; font-size: 9px; }
-        .empty { color: var(--muted); text-align: center; padding: 20px; font-size: 10px; }
-        
-        /* Log */
-        .log { font-family: monospace; font-size: 9px; line-height: 1.4; }
-        .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 6px; }
-        .log-time { color: var(--muted); flex-shrink: 0; font-size: 8px; }
-        .log-msg { word-break: break-all; }
-        .log-entry.event { color: #4ade80; }
-        .log-entry.error { color: #f87171; }
-        .log-entry.info { color: #60a5fa; }
-        .log-entry.warn { color: #fbbf24; }
-        
-        /* Subscriptions list */
-        .sub-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; margin: 2px; font-size: 9px; cursor: pointer; }
-        .sub-chip.active { border-color: var(--success); background: rgba(34, 197, 94, 0.1); }
-        .sub-chip .x { color: var(--error); margin-left: 4px; cursor: pointer; }
-        
-        .badge { padding: 1px 4px; border-radius: 3px; font-size: 8px; font-weight: 600; }
-        .badge-events { background: #1e3a5f; color: #60a5fa; }
-        .badge-snapshot { background: #3f2e1e; color: #fbbf24; }
-        
-        .view-tabs { display: flex; gap: 2px; }
-        .view-tab { padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; color: var(--muted); background: transparent; border: none; }
-        .view-tab.active { background: var(--accent); color: var(--bg); }
-        
-        .json { background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; font-family: monospace; font-size: 8px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-        
-        @keyframes flash-green { from { background: rgba(34, 197, 94, 0.3); } }
-        @keyframes flash-red { from { background: rgba(239, 68, 68, 0.3); } }
-        
-        /* Hide scrollbars but keep functionality */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+        .actions button { font-size: 11px; padding: 4px 8px; }
     </style>
 </head>
 <body>
     <div class="app">
-        <header class="header">
-            <span class="logo">⚡ LQ</span>
-            <span id="statusBadge" class="status disconnected">Off</span>
-            <button class="btn btn-primary" id="connectBtn" style="font-size:9px;padding:2px 6px;">Connect</button>
-            <button class="btn btn-ghost" id="healthBtn" style="font-size:9px;padding:2px 6px;" title="Health Check">💓</button>
-            <div class="stats-bar">
-                <div class="stat-item"><span class="v accent" id="statSubs">0</span><span style="color:var(--muted)">sub</span></div>
-                <div class="stat-item"><span class="v success" id="statRows">0</span><span style="color:var(--muted)">row</span></div>
-                <div class="stat-item"><span class="v warning" id="statEvents">0</span><span style="color:var(--muted)">ev</span></div>
-                <div class="stat-item"><span class="v purple" id="statLatency">-</span></div>
+        <header>
+            <span class="logo">LiveQuery</span>
+            <span id="status" class="status off">offline</span>
+            <button class="primary" id="connectBtn">Connect</button>
+            <div class="stats">
+                <b id="nSubs">0</b>subs
+                <b id="nRows">0</b>rows
+                <b id="latency">-</b>
             </div>
         </header>
         
-        <nav class="tabs-nav">
-            <button class="tab-btn active" data-tab="data">📊 Data</button>
-            <button class="tab-btn" data-tab="subscribe">➕ Subscribe</button>
-            <button class="tab-btn" data-tab="sql">⚡ SQL</button>
-            <button class="tab-btn" data-tab="log">📝 Log</button>
+        <nav>
+            <button class="on" data-tab="data">Data</button>
+            <button data-tab="subscribe">Subscribe</button>
+            <button data-tab="sql">SQL</button>
+            <button data-tab="log">Log</button>
         </nav>
         
-        <div class="main-content">
-            <!-- Subscribe Controls -->
-            <div class="controls" id="subscribeTab">
-                <div class="controls-grid">
-                    <div>
-                        <div class="input-group">
-                            <label>Quick Query</label>
-                            <select id="quickQuery">
-                                <option value="SELECT * FROM orders WHERE status = 'pending'">Orders: Pending</option>
-                                <option value="SELECT * FROM orders WHERE status = 'shipped'">Orders: Shipped</option>
-                                <option value="SELECT * FROM orders">Orders: All</option>
-                                <option value="SELECT * FROM products WHERE active = true">Products: Active</option>
-                                <option value="SELECT * FROM users">Users: All</option>
-                            </select>
-                        </div>
+        <main>
+            <div class="panel on" id="dataPanel">
+                <div class="subs" id="subs"></div>
+                <div class="data" id="data"><div class="empty">No subscriptions</div></div>
+            </div>
+            
+            <div class="panel" id="subscribePanel">
+                <div class="row">
+                    <div class="field">
+                        <label>Preset</label>
+                        <select id="preset">
+                            <option value="SELECT * FROM orders WHERE status = 'pending'">Orders (pending)</option>
+                            <option value="SELECT * FROM orders">Orders (all)</option>
+                            <option value="SELECT * FROM products WHERE active = true">Products (active)</option>
+                            <option value="SELECT * FROM users">Users</option>
+                        </select>
                     </div>
-                    <div>
-                        <div class="input-group">
-                            <label>Mode</label>
-                            <select id="mode">
-                                <option value="events">Events</option>
-                                <option value="snapshot">Snapshot</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="input-group">
-                            <label>Identity</label>
-                            <input type="text" id="identityCols" value="id">
-                        </div>
+                    <div class="field">
+                        <label>Mode</label>
+                        <select id="mode">
+                            <option value="events">Events</option>
+                            <option value="snapshot">Snapshot</option>
+                        </select>
                     </div>
                 </div>
-                <div class="input-group" style="margin-top:4px;">
-                    <label>SQL Query</label>
+                <div class="field">
+                    <label>Query</label>
                     <textarea id="query">SELECT * FROM orders WHERE status = 'pending'</textarea>
                 </div>
-                <button class="btn btn-success" id="subscribeBtn" disabled style="width:100%;margin-top:4px;">Subscribe</button>
+                <button class="success" id="subBtn" disabled>Subscribe</button>
             </div>
             
-            <!-- SQL Controls -->
-            <div class="controls" id="sqlTab">
-                <div class="input-group">
-                    <label>SQL Statement</label>
-                    <textarea id="sqlExec">INSERT INTO orders (user_id, product, amount, status) VALUES (1, 'Test', 99.99, 'pending')</textarea>
+            <div class="panel" id="sqlPanel">
+                <div class="field">
+                    <label>SQL</label>
+                    <textarea id="sql">INSERT INTO orders (user_id, product, amount, status) VALUES (1, 'Test', 99.99, 'pending')</textarea>
                 </div>
-                <button class="btn btn-primary" id="execSqlBtn" style="width:100%;">Execute</button>
-                <div id="sqlResult" style="margin-top:4px;font-size:9px;color:var(--muted);"></div>
-                <div class="actions-row">
-                    <button class="btn btn-ghost" data-sql="insert">+ Order</button>
-                    <button class="btn btn-ghost" data-sql="ship">Ship</button>
-                    <button class="btn btn-ghost" data-sql="complete">Complete</button>
-                    <button class="btn btn-ghost" data-sql="delete">Delete</button>
-                    <button class="btn btn-ghost" data-sql="burst5">⚡5</button>
+                <button class="primary" id="execBtn">Execute</button>
+                <div id="sqlResult" style="margin-top:8px;font-size:11px;color:var(--muted);"></div>
+                <div class="actions">
+                    <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Order</button>
+                    <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship</button>
+                    <button class="ghost" data-sql="DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)">Delete</button>
                 </div>
             </div>
             
-            <!-- Data Panel - always visible -->
-            <div class="panels" id="dataTab">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div id="subsChips" style="display:flex;flex-wrap:wrap;gap:2px;"></div>
-                        <div class="view-tabs">
-                            <button class="view-tab active" data-view="table">Table</button>
-                            <button class="view-tab" data-view="json">JSON</button>
-                        </div>
-                    </div>
-                    <div class="panel-content" id="dataPanel">
-                        <div class="empty">Subscribe to see data</div>
-                    </div>
-                </div>
+            <div class="panel" id="logPanel">
+                <div class="log" id="log"></div>
             </div>
-            
-            <!-- Log Panel -->
-            <div class="panels" id="logTab" style="display:none;">
-                <div class="panel">
-                    <div class="panel-header">
-                        <span>Event Log</span>
-                        <button class="btn btn-ghost" id="clearLogBtn" style="font-size:8px;padding:2px 4px;">Clear</button>
-                    </div>
-                    <div class="panel-content">
-                        <div id="log" class="log"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </main>
     </div>
     
     <input type="hidden" id="natsUrl" value="ws://localhost:9222">
@@ -219,394 +141,100 @@
         import { connect, StringCodec } from 'https://unpkg.com/nats.ws@1.30.3/esm/nats.js';
         const sc = StringCodec();
         
-        let nc = null;
-        let subscriptions = new Map();
-        let subCounter = 0;
-        let activeSubId = null;
-        let dataView = 'table';
-        let totalEvents = 0;
+        let nc = null, subs = new Map(), active = null, cnt = 0;
+        const $ = id => document.getElementById(id);
         
-        const log = (msg, type = 'info') => {
-            const el = document.getElementById('log');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            const time = new Date().toLocaleTimeString('en-US', {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
-            entry.innerHTML = `<span class="log-time">${time}</span><span class="log-msg">${msg}</span>`;
-            el.insertBefore(entry, el.firstChild);
-            if (el.children.length > 100) el.removeChild(el.lastChild);
+        const log = (msg, cls = '') => {
+            const t = new Date().toLocaleTimeString('en-GB', {hour12:false});
+            $('log').innerHTML = `<div><span class="t">${t}</span><span class="${cls}">${msg}</span></div>` + $('log').innerHTML;
         };
         
-        const setStatus = (status) => {
-            const badge = document.getElementById('statusBadge');
-            const labels = { connected: 'On', disconnected: 'Off', connecting: '...' };
-            badge.textContent = labels[status] || status;
-            badge.className = `status ${status}`;
-        };
-        
-        const updateStats = () => {
-            document.getElementById('statSubs').textContent = subscriptions.size;
-            const sub = subscriptions.get(activeSubId);
-            document.getElementById('statRows').textContent = sub ? sub.data.size : 0;
-            document.getElementById('statEvents').textContent = totalEvents;
-        };
-        
-        const renderSubsChips = () => {
-            const el = document.getElementById('subsChips');
-            if (subscriptions.size === 0) {
-                el.innerHTML = '<span style="color:var(--muted);font-size:9px;">No subs</span>';
-                return;
-            }
-            el.innerHTML = Array.from(subscriptions.entries()).map(([id, sub]) => `
-                <span class="sub-chip ${id === activeSubId ? 'active' : ''}" onclick="selectSub('${id}')">
-                    ${sub.query.slice(0,20)}... (${sub.data.size})
-                    <span class="x" onclick="event.stopPropagation();unsubscribe('${id}')">×</span>
-                </span>
-            `).join('');
-        };
-        
-        const renderData = () => {
-            const panel = document.getElementById('dataPanel');
-            const sub = subscriptions.get(activeSubId);
+        const render = () => {
+            $('nSubs').textContent = subs.size;
+            $('subs').innerHTML = subs.size ? [...subs].map(([id, s]) => 
+                `<span class="sub ${id===active?'on':''}" onclick="sel('${id}')">${s.q.slice(0,25)}… (${s.rows.size})<span class="x" onclick="event.stopPropagation();unsub('${id}')">×</span></span>`
+            ).join('') : '';
             
-            if (!sub || sub.data.size === 0) {
-                panel.innerHTML = '<div class="empty">No data</div>';
-                updateStats();
-                return;
-            }
+            const s = subs.get(active);
+            if (!s || !s.rows.size) { $('data').innerHTML = '<div class="empty">No data</div>'; $('nRows').textContent = 0; return; }
             
-            const rows = Array.from(sub.data.values());
-            
-            if (dataView === 'json') {
-                panel.innerHTML = `<div class="json">${JSON.stringify(rows, null, 2)}</div>`;
-            } else {
-                const cols = Object.keys(rows[0]);
-                panel.innerHTML = `
-                    <table>
-                        <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-                        <tbody>${rows.map(row => `<tr>${cols.map(c => `<td title="${JSON.stringify(row[c])}">${JSON.stringify(row[c]) ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
-                    </table>
-                `;
-            }
-            updateStats();
+            const rows = [...s.rows.values()], cols = Object.keys(rows[0]);
+            $('nRows').textContent = rows.length;
+            $('data').innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${JSON.stringify(r[c])??''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
         };
         
-        window.selectSub = (id) => {
-            activeSubId = id;
-            renderSubsChips();
-            renderData();
-        };
-        
-        window.unsubscribe = async (id) => {
+        window.sel = id => { active = id; render(); };
+        window.unsub = async id => {
             if (!nc) return;
-            const sub = subscriptions.get(id);
-            if (!sub) return;
-            
-            try {
-                await nc.request(`livequery.${id}.unsubscribe`, sc.encode(JSON.stringify({ subscription_id: id })), { timeout: 5000 });
-                log(`Unsub ${id.slice(0,8)}`, 'info');
-            } catch (e) {
-                log(`Unsub err: ${e.message}`, 'error');
-            }
-            
-            if (sub.natsSub) sub.natsSub.unsubscribe();
-            subscriptions.delete(id);
-            if (activeSubId === id) activeSubId = subscriptions.keys().next().value || null;
-            renderSubsChips();
-            renderData();
+            try { await nc.request(`livequery.${id}.unsubscribe`, sc.encode(JSON.stringify({subscription_id:id})), {timeout:5000}); } catch {}
+            subs.get(id)?.sub?.unsubscribe();
+            subs.delete(id);
+            if (active === id) active = subs.keys().next().value || null;
+            render();
         };
         
-        document.getElementById('connectBtn').onclick = async () => {
-            const url = document.getElementById('natsUrl').value;
-            const btn = document.getElementById('connectBtn');
-            
-            if (nc) {
-                await nc.close();
-                nc = null;
-                setStatus('disconnected');
-                btn.textContent = 'Connect';
-                document.getElementById('subscribeBtn').disabled = true;
-                log('Disconnected', 'info');
-                return;
-            }
-            
-            setStatus('connecting');
-            btn.disabled = true;
-            log(`Connecting...`);
-            
+        $('connectBtn').onclick = async () => {
+            if (nc) { await nc.close(); nc = null; $('status').className = 'status off'; $('status').textContent = 'offline'; $('connectBtn').textContent = 'Connect'; $('subBtn').disabled = true; return; }
             try {
-                nc = await connect({ servers: url });
-                setStatus('connected');
-                btn.textContent = 'Disconnect';
-                btn.disabled = false;
-                document.getElementById('subscribeBtn').disabled = false;
-                log('Connected!', 'event');
+                nc = await connect({ servers: $('natsUrl').value });
+                $('status').className = 'status on'; $('status').textContent = 'online';
+                $('connectBtn').textContent = 'Disconnect'; $('subBtn').disabled = false;
+                log('Connected', 'ok');
+            } catch (e) { log('Failed: ' + e.message, 'err'); }
+        };
+        
+        $('subBtn').onclick = async () => {
+            if (!nc) return;
+            const q = $('query').value.trim(), mode = $('mode').value;
+            if (!q) return;
+            
+            const id = `w${Date.now()}-${++cnt}`;
+            try {
+                const res = JSON.parse(sc.decode((await nc.request(`livequery.${id}.subscribe`, sc.encode(JSON.stringify({subscription_id:id, query:q, mode})), {timeout:10000})).data));
+                if (!res.success) { log(res.error, 'err'); return; }
                 
+                const s = { q, mode, rows: new Map(), sub: null };
+                (res.snapshot || res.rows || []).forEach(r => { const d = r.data || r; s.rows.set(d.id ?? JSON.stringify(d), d); });
+                
+                s.sub = nc.subscribe(res.subject);
                 (async () => {
-                    for await (const s of nc.status()) {
-                        if (s.type === 'disconnect' || s.type === 'error') {
-                            setStatus('disconnected');
-                            log(`${s.type}`, 'error');
-                        } else if (s.type === 'reconnect') {
-                            setStatus('connected');
-                            log('Reconnected', 'event');
-                        }
+                    for await (const m of s.sub) {
+                        const b = JSON.parse(sc.decode(m.data));
+                        if (b.ts) $('latency').textContent = (Date.now() - b.ts) + 'ms';
+                        if (b.events) b.events.forEach(e => e.mz_diff === 1 ? s.rows.set(e.data.id ?? JSON.stringify(e.data), e.data) : s.rows.delete(e.data.id));
+                        if (b.rows) { s.rows.clear(); b.rows.forEach(r => s.rows.set(r.id ?? JSON.stringify(r), r)); }
+                        if (id === active) render();
                     }
                 })();
                 
-            } catch (e) {
-                log(`Failed: ${e.message}`, 'error');
-                setStatus('disconnected');
-                btn.disabled = false;
-            }
+                subs.set(id, s); active = id; render(); switchTab('data');
+                log('Subscribed: ' + q.slice(0, 30), 'ok');
+            } catch (e) { log(e.message, 'err'); }
         };
         
-        document.getElementById('subscribeBtn').onclick = async () => {
-            if (!nc) return;
-            
-            const query = document.getElementById('query').value.trim();
-            const mode = document.getElementById('mode').value;
-            const identityCols = document.getElementById('identityCols').value.split(',').map(s => s.trim()).filter(Boolean);
-            
-            if (!query) { log('No query', 'error'); return; }
-            
-            log(`Sub: ${query.slice(0, 30)}...`);
-            
+        const execSql = async sql => {
+            $('sqlResult').textContent = '...';
             try {
-                const subscriptionId = `web-${Date.now()}-${++subCounter}`;
-                
-                const msg = await nc.request(`livequery.${subscriptionId}.subscribe`, sc.encode(JSON.stringify({
-                    subscription_id: subscriptionId,
-                    query,
-                    identity_columns: identityCols.length ? identityCols : null,
-                    mode
-                })), { timeout: 10000 });
-                
-                const res = JSON.parse(sc.decode(msg.data));
-                
-                if (!res.success) {
-                    log(`Failed: ${res.error}`, 'error');
-                    return;
-                }
-                
-                const subId = res.subscription_id;
-                const subject = res.subject;
-                
-                log(`OK! ${subId.slice(0,8)}`, 'event');
-                
-                const subData = { id: subId, query, mode, subject, seq: res.seq || 0, data: new Map(), natsSub: null };
-                
-                if (mode === 'events' && res.snapshot) {
-                    res.snapshot.forEach(ev => {
-                        if (ev.data) {
-                            const rowData = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-                            const rowId = rowData.id ?? JSON.stringify(rowData);
-                            if (ev.mz_diff === 1) subData.data.set(rowId, rowData);
-                        }
-                    });
-                    log(`Snap: ${subData.data.size} rows`, 'info');
-                } else if (mode === 'snapshot' && res.rows) {
-                    res.rows.forEach(row => {
-                        const rowData = typeof row === 'string' ? JSON.parse(row) : row;
-                        const rowId = rowData.id ?? JSON.stringify(rowData);
-                        subData.data.set(rowId, rowData);
-                    });
-                    log(`Init: ${subData.data.size} rows`, 'info');
-                }
-                
-                const natsSub = nc.subscribe(subject);
-                subData.natsSub = natsSub;
-                
-                (async () => {
-                    for await (const m of natsSub) {
-                        try {
-                            const batch = JSON.parse(sc.decode(m.data));
-                            subData.seq = batch.seq || subData.seq;
-                            totalEvents++;
-                            
-                            // Calculate true latency using server timestamp
-                            if (batch.ts) {
-                                const latency = Date.now() - batch.ts;
-                                document.getElementById('statLatency').textContent = `${latency}ms`;
-                            }
-                            
-                            if (mode === 'events' && batch.events) {
-                                batch.events.forEach(ev => {
-                                    if (ev.data) {
-                                        const rowData = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-                                        const rowId = rowData.id ?? JSON.stringify(rowData);
-                                        if (ev.mz_diff === 1) {
-                                            subData.data.set(rowId, rowData);
-                                            log(`+ ${rowId}`, 'event');
-                                        } else if (ev.mz_diff === -1) {
-                                            subData.data.delete(rowId);
-                                            log(`- ${rowId}`, 'warn');
-                                        }
-                                    }
-                                });
-                            } else if (mode === 'snapshot' && batch.rows) {
-                                subData.data.clear();
-                                batch.rows.forEach(row => {
-                                    const rowData = typeof row === 'string' ? JSON.parse(row) : row;
-                                    subData.data.set(rowData.id ?? JSON.stringify(rowData), rowData);
-                                });
-                                log(`Snap: ${subData.data.size}`, 'info');
-                            }
-                            
-                            if (subId === activeSubId) renderData();
-                            renderSubsChips();
-                        } catch (e) {
-                            log(`Err: ${e.message}`, 'error');
-                        }
-                    }
-                })();
-                
-                subscriptions.set(subId, subData);
-                activeSubId = subId;
-                renderSubsChips();
-                renderData();
-                
-                // Switch to data tab
-                switchTab('data');
-                
-            } catch (e) {
-                log(`Err: ${e.message}`, 'error');
-            }
+                const r = await (await fetch('http://localhost:3001/sql', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sql}) })).json();
+                $('sqlResult').textContent = r.error ? 'Error: ' + r.error : 'OK (' + r.rowCount + ')';
+                $('sqlResult').style.color = r.error ? 'var(--err)' : 'var(--ok)';
+            } catch { $('sqlResult').textContent = 'Error'; $('sqlResult').style.color = 'var(--err)'; }
         };
         
-        setInterval(async () => {
-            if (nc && subscriptions.size > 0) {
-                for (const [subId] of subscriptions) {
-                    try {
-                        await nc.request(`livequery.${subId}.heartbeat`, sc.encode(JSON.stringify({ subscription_id: subId })), { timeout: 5000 });
-                    } catch (e) {
-                        log(`HB fail ${subId.slice(0,6)}`, 'error');
-                    }
-                }
-            }
-        }, 15000);
+        $('execBtn').onclick = () => execSql($('sql').value);
+        document.querySelectorAll('[data-sql]').forEach(b => b.onclick = () => { $('sql').value = b.dataset.sql; execSql(b.dataset.sql); });
+        $('preset').onchange = e => $('query').value = e.target.value;
         
-        // Tab switching
-        const switchTab = (tab) => {
-            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-            
-            document.getElementById('subscribeTab').classList.remove('active');
-            document.getElementById('sqlTab').classList.remove('active');
-            document.getElementById('dataTab').style.display = 'none';
-            document.getElementById('logTab').style.display = 'none';
-            
-            if (tab === 'data') {
-                document.getElementById('dataTab').style.display = 'flex';
-            } else if (tab === 'subscribe') {
-                document.getElementById('subscribeTab').classList.add('active');
-                document.getElementById('dataTab').style.display = 'flex';
-            } else if (tab === 'sql') {
-                document.getElementById('sqlTab').classList.add('active');
-                document.getElementById('dataTab').style.display = 'flex';
-            } else if (tab === 'log') {
-                document.getElementById('logTab').style.display = 'flex';
-            }
+        const switchTab = tab => {
+            document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+            $(tab + 'Panel').classList.add('on');
         };
+        document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
         
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.onclick = () => switchTab(btn.dataset.tab);
-        });
+        setInterval(() => { if (nc) subs.forEach((_, id) => nc.request(`livequery.${id}.heartbeat`, sc.encode('{}'), {timeout:5000}).catch(() => {})); }, 15000);
         
-        document.querySelectorAll('.view-tab').forEach(tab => {
-            tab.onclick = () => {
-                document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                dataView = tab.dataset.view;
-                renderData();
-            };
-        });
-        
-        document.getElementById('clearLogBtn').onclick = () => {
-            document.getElementById('log').innerHTML = '';
-        };
-        
-        const execSql = async (sql) => {
-            const resultEl = document.getElementById('sqlResult');
-            resultEl.textContent = '...';
-            resultEl.style.color = 'var(--muted)';
-            
-            try {
-                const res = await fetch('http://localhost:3001/sql', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sql })
-                });
-                const data = await res.json();
-                
-                if (data.error) {
-                    resultEl.textContent = `Err: ${data.error}`;
-                    resultEl.style.color = 'var(--error)';
-                    log(`SQL Err`, 'error');
-                } else {
-                    resultEl.textContent = `OK (${data.rowCount})`;
-                    resultEl.style.color = 'var(--success)';
-                    log(`SQL OK`, 'event');
-                }
-            } catch (e) {
-                resultEl.textContent = `Err`;
-                resultEl.style.color = 'var(--error)';
-            }
-        };
-        
-        document.getElementById('execSqlBtn').onclick = () => {
-            const sql = document.getElementById('sqlExec').value.trim();
-            if (sql) execSql(sql);
-        };
-        
-        document.getElementById('quickQuery').onchange = (e) => {
-            if (e.target.value) document.getElementById('query').value = e.target.value;
-        };
-        
-        const quickSqls = {
-            insert: "INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')",
-            ship: "UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' ORDER BY id LIMIT 1)",
-            complete: "UPDATE orders SET status = 'completed' WHERE id = (SELECT id FROM orders WHERE status = 'pending' ORDER BY id LIMIT 1)",
-            delete: "DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)",
-            burst5: null
-        };
-        
-        const burstInsert = async (count) => {
-            for (let i = 0; i < count; i++) {
-                await execSql(`INSERT INTO orders (user_id, product, amount, status) VALUES (${Math.floor(Math.random()*4+1)}, 'Burst ${i+1}', ${(Math.random()*500+50).toFixed(2)}, 'pending')`);
-            }
-            log(`Burst ${count} done`, 'event');
-        };
-        
-        document.querySelectorAll('[data-sql]').forEach(btn => {
-            btn.onclick = () => {
-                const action = btn.dataset.sql;
-                if (action === 'burst5') burstInsert(5);
-                else if (quickSqls[action]) {
-                    document.getElementById('sqlExec').value = quickSqls[action];
-                    execSql(quickSqls[action]);
-                }
-            };
-        });
-        
-        // Health check
-        document.getElementById('healthBtn').onclick = async () => {
-            if (!nc) { log('Not connected', 'error'); return; }
-            try {
-                const msg = await nc.request('livequery.health', sc.encode(''), { timeout: 5000 });
-                const health = JSON.parse(sc.decode(msg.data));
-                log(`Health: ${health.status} | subs=${health.subscriptions} queries=${health.queries} in=${health.msgs_in} out=${health.msgs_out}`, 'event');
-                
-                // Update UI with server stats
-                document.getElementById('statSubs').textContent = health.subscriptions;
-            } catch (e) {
-                log(`Health check failed: ${e.message}`, 'error');
-            }
-        };
-        
-        // Auto-connect on load
-        setTimeout(() => document.getElementById('connectBtn').click(), 500);
-        
-        log('Ready', 'info');
+        setTimeout(() => $('connectBtn').click(), 500);
     </script>
 </body>
 </html>
