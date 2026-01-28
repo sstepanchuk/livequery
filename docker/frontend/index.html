@@ -256,7 +256,7 @@
             const el = $('sqlResult');
             el.className = 'result'; el.textContent = 'Executing...';
             try {
-                const r = await (await fetch('http://localhost:3001/sql', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sql}) })).json();
+                const r = await (await fetch('/sql', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sql}) })).json();
                 el.className = r.error ? 'result err' : 'result ok';
                 el.textContent = r.error ? 'Error: ' + r.error : 'Success: ' + r.rowCount + ' row(s) affected';
                 log(r.error ? 'SQL error' : 'SQL executed', r.error ? 'err' : 'ok');

@@ -1,0 +1,33 @@
+# LiveQuery Demo - All-in-one test environment
+# docker run -p 3000:3000 -p 9222:9222 ghcr.io/sstepanchuk/livequery-demo
+
+FROM postgres:16-alpine
+
+RUN apk add --no-cache nats-server nginx nodejs npm ca-certificates
+
+WORKDIR /app
+
+# SQL API
+COPY docker/sql-api/package.json docker/sql-api/server.js ./sql-api/
+RUN cd sql-api && npm install --production --silent
+
+# Frontend & configs
+COPY docker/frontend/index.html ./frontend/
+COPY docker/init.sql /docker-entrypoint-initdb.d/
+COPY docker/demo-start.sh /start.sh
+RUN chmod +x /start.sh
+
+# LiveQuery binary
+COPY livequery-server /usr/local/bin/
+
+# Nginx
+RUN echo -e 'server {\n  listen 3000;\n  root /app/frontend;\n  location /sql { proxy_pass http://127.0.0.1:3001; }\n}' > /etc/nginx/http.d/default.conf
+
+# NATS  
+RUN echo -e 'port: 4222\nwebsocket { port: 9222\n  no_tls: true\n}' > /etc/nats.conf
+
+ENV POSTGRES_USER=livequery POSTGRES_PASSWORD=livequery POSTGRES_DB=livequery
+
+EXPOSE 3000 9222
+
+CMD ["/start.sh"]

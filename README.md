@@ -58,13 +58,23 @@ cargo build --release
 ./target/release/livequery-server
 ```
 
-## Quick Start with Docker Compose
+## Quick Start
+
+### Demo Image (Easiest)
+
+All-in-one image with PostgreSQL, NATS, LiveQuery, and test UI:
+
+```bash
+docker run -p 3000:3000 -p 9222:9222 ghcr.io/sstepanchuk/livequery-demo
+```
+
+Open http://localhost:3000 — ready to test.
+
+### Docker Compose
 
 ```bash
 cd docker
 docker-compose up -d
-
-# Open test frontend
 open http://localhost:3000
 ```
 
