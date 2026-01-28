@@ -6,7 +6,7 @@ Real-time SQL query subscriptions for PostgreSQL via NATS.
 [![Release](https://img.shields.io/github/v/release/sstepanchuk/livequery?color=10b981&label=release)](https://github.com/sstepanchuk/livequery/releases)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-10b981)](https://ghcr.io/sstepanchuk/livequery)
 ![Rust](https://img.shields.io/badge/rust-stable-10b981)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791)
 ![NATS](https://img.shields.io/badge/NATS-2.10+-27aae1)
 ![License](https://img.shields.io/badge/license-MIT-10b981)
 
