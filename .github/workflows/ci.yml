@@ -66,13 +66,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       
       - name: Run benchmarks
-        run: cargo bench -- --output-format bencher | tee bench-output.txt
+        run: cargo bench --bench perf -- --noplot 2>&1 | tee bench-output.txt
       
       - name: Compare benchmarks
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Rust Benchmarks
-          tool: 'cargo'
+          tool: 'criterionrs'
           output-file-path: bench-output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
