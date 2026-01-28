@@ -188,12 +188,13 @@ while let Some(msg) = sub.next().await {
                         <span class="mode-name">events</span>
                         <span class="mode-tag">Recommended</span>
                     </div>
-                    <p>Receive only changes with <code>mz_diff</code>: <code>+1</code> = insert, <code>-1</code> = delete. Update = delete old + insert new. Ideal for real-time dashboards.</p>
-                    <pre><code class="language-javascript">{ "seq": 1, "ts": 1706464800000, "events": [
+                    <p>Differential updates inspired by <a href="https://materialize.com/docs/sql/subscribe/" target="_blank">Materialize SUBSCRIBE</a>. <code>mz_diff: +1</code> = insert, <code>-1</code> = delete. Update = delete + insert pair.</p>
+                    <pre><code class="language-javascript">// Insert
+{ "seq": 1, "ts": 1706464800000, "events": [
   { "mz_diff": 1, "data": { "id": 1, "status": "pending" } }
 ]}
-// Update: old row deleted, new row inserted
-{ "seq": 2, "events": [
+// Update = delete old + insert new
+{ "seq": 2, "ts": 1706464801000, "events": [
   { "mz_diff": -1, "data": { "id": 1, "status": "pending" } },
   { "mz_diff": 1, "data": { "id": 1, "status": "shipped" } }
 ]}</code></pre>
