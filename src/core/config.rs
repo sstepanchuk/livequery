@@ -1,6 +1,6 @@
 //! Production Configuration - All tunables in one place
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::env::var;
 use std::time::Duration;
 

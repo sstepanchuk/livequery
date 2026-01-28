@@ -1,17 +1,17 @@
 //! Subscription Manager - Client-provided IDs with shared query optimization
 
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use parking_lot::RwLock;
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet, FxHasher};
 use smallvec::SmallVec;
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
-use crate::core::event::{ts_millis, EventBatch, SubscribeEvent, SubscriptionMode};
+use crate::core::event::{EventBatch, SubscribeEvent, SubscriptionMode, ts_millis};
 use crate::core::query::{self, WhereFilter};
 use crate::core::row::RowData;
 
@@ -232,16 +232,16 @@ impl SubscriptionManager {
 
     fn remove_query(&self, query_id: &str) {
         // Double-check refcount is still zero before removal (handles race)
-        if let Entry::Occupied(e) = self.queries.entry(query_id.into()) {
-            if e.get().refcount.load(Relaxed) == 0 {
-                let sq = e.remove();
-                for t in sq.tables.iter() {
-                    if let Some(mut x) = self.table_idx.get_mut(t.as_str()) {
-                        x.remove(query_id);
-                    }
+        if let Entry::Occupied(e) = self.queries.entry(query_id.into())
+            && e.get().refcount.load(Relaxed) == 0
+        {
+            let sq = e.remove();
+            for t in sq.tables.iter() {
+                if let Some(mut x) = self.table_idx.get_mut(t.as_str()) {
+                    x.remove(query_id);
                 }
-                info!("~Query Q{}", &query_id[..8]);
             }
+            info!("~Query Q{}", &query_id[..8]);
         }
     }
 

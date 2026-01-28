@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use async_nats::Client;
 use bytes::Bytes;
 use futures::StreamExt;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use tracing::{info, warn};
 
 #[inline]
@@ -16,16 +16,12 @@ fn sub_id_from_subject<'a>(prefix: &str, subject: &'a str, tail: &str) -> Option
         .strip_prefix('.')?
         .strip_suffix(tail)?
         .strip_suffix('.')?;
-    if rest.is_empty() {
-        None
-    } else {
-        Some(rest)
-    }
+    if rest.is_empty() { None } else { Some(rest) }
 }
 
+use crate::core::Config;
 use crate::core::event::*;
 use crate::core::subscription::SubscriptionManager;
-use crate::core::Config;
 use crate::infra::DbPool;
 
 #[derive(Clone)]
@@ -189,12 +185,12 @@ impl NatsHandler {
     }
 
     async fn reply<T: serde::Serialize>(&self, reply_to: &Option<async_nats::Subject>, data: &T) {
-        if let Some(subj) = reply_to {
-            if let Ok(bytes) = serde_json::to_vec(data) {
-                self.msgs_out.fetch_add(1, Relaxed);
-                if let Err(e) = self.nc.publish(subj.clone(), bytes.into()).await {
-                    warn!("Reply error: {e}");
-                }
+        if let Some(subj) = reply_to
+            && let Ok(bytes) = serde_json::to_vec(data)
+        {
+            self.msgs_out.fetch_add(1, Relaxed);
+            if let Err(e) = self.nc.publish(subj.clone(), bytes.into()).await {
+                warn!("Reply error: {e}");
             }
         }
     }

@@ -181,14 +181,15 @@ fn test_heartbeat_new() {
 #[test]
 fn test_reject_non_select() {
     let m = SubscriptionManager::new(1000);
-    assert!(m
-        .subscribe(
+    assert!(
+        m.subscribe(
             "sub-1",
             "INSERT INTO users (name) VALUES ('x')",
             None,
             SubscriptionMode::Events
         )
-        .is_err());
+        .is_err()
+    );
 }
 
 #[test]
@@ -202,14 +203,15 @@ fn test_duplicate_subscription_id() {
     )
     .unwrap();
     // Same subscription_id should fail
-    assert!(m
-        .subscribe(
+    assert!(
+        m.subscribe(
             "sub-1",
             "SELECT * FROM orders",
             None,
             SubscriptionMode::Events
         )
-        .is_err());
+        .is_err()
+    );
 }
 
 #[test]

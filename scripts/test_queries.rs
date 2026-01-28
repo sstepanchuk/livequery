@@ -34,37 +34,63 @@ async fn main() -> Result<()> {
     // Test queries from simple to complex
     let test_cases = vec![
         // 1. Simple SELECT
-        ("Simple SELECT", "SELECT * FROM users WHERE active = true", Some(vec!["id".to_string()])),
-
+        (
+            "Simple SELECT",
+            "SELECT * FROM users WHERE active = true",
+            Some(vec!["id".to_string()]),
+        ),
         // 2. SELECT with ORDER BY and LIMIT
-        ("ORDER BY + LIMIT", "SELECT * FROM products ORDER BY price DESC LIMIT 5", Some(vec!["id".to_string()])),
-
+        (
+            "ORDER BY + LIMIT",
+            "SELECT * FROM products ORDER BY price DESC LIMIT 5",
+            Some(vec!["id".to_string()]),
+        ),
         // 3. INNER JOIN
-        ("INNER JOIN", "SELECT u.name, o.id as order_id, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id", Some(vec!["order_id".to_string()])),
-
+        (
+            "INNER JOIN",
+            "SELECT u.name, o.id as order_id, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id",
+            Some(vec!["order_id".to_string()]),
+        ),
         // 4. LEFT JOIN
-        ("LEFT JOIN", "SELECT p.name, c.name as category FROM products p LEFT JOIN categories c ON p.category_id = c.id", Some(vec!["id".to_string()])),
-
+        (
+            "LEFT JOIN",
+            "SELECT p.name, c.name as category FROM products p LEFT JOIN categories c ON p.category_id = c.id",
+            Some(vec!["id".to_string()]),
+        ),
         // 5. Multiple JOINs
-        ("Multiple JOINs", r#"
+        (
+            "Multiple JOINs",
+            r#"
             SELECT u.name as customer, p.name as product, oi.quantity, oi.price
             FROM order_items oi
             JOIN orders o ON oi.order_id = o.id
             JOIN users u ON o.user_id = u.id
             JOIN products p ON oi.product_id = p.id
-        "#, None),
-
+        "#,
+            None,
+        ),
         // 6. GROUP BY with aggregates
-        ("GROUP BY + COUNT", "SELECT user_id, COUNT(*) as order_count, SUM(total) as total_spent FROM orders GROUP BY user_id", Some(vec!["user_id".to_string()])),
-
+        (
+            "GROUP BY + COUNT",
+            "SELECT user_id, COUNT(*) as order_count, SUM(total) as total_spent FROM orders GROUP BY user_id",
+            Some(vec!["user_id".to_string()]),
+        ),
         // 7. GROUP BY with HAVING
-        ("GROUP BY + HAVING", "SELECT category_id, COUNT(*) as cnt, AVG(price) as avg_price FROM products GROUP BY category_id HAVING COUNT(*) > 1", Some(vec!["category_id".to_string()])),
-
+        (
+            "GROUP BY + HAVING",
+            "SELECT category_id, COUNT(*) as cnt, AVG(price) as avg_price FROM products GROUP BY category_id HAVING COUNT(*) > 1",
+            Some(vec!["category_id".to_string()]),
+        ),
         // 8. Subquery in WHERE
-        ("Subquery WHERE", "SELECT * FROM users WHERE id IN (SELECT DISTINCT user_id FROM orders WHERE status = 'completed')", Some(vec!["id".to_string()])),
-
+        (
+            "Subquery WHERE",
+            "SELECT * FROM users WHERE id IN (SELECT DISTINCT user_id FROM orders WHERE status = 'completed')",
+            Some(vec!["id".to_string()]),
+        ),
         // 9. Subquery in FROM (derived table)
-        ("Derived Table", r#"
+        (
+            "Derived Table",
+            r#"
             SELECT category_name, total_products, total_stock
             FROM (
                 SELECT c.name as category_name, COUNT(p.id) as total_products, SUM(p.stock) as total_stock
@@ -73,10 +99,13 @@ async fn main() -> Result<()> {
                 GROUP BY c.id, c.name
             ) as category_stats
             WHERE total_products > 0
-        "#, None),
-
+        "#,
+            None,
+        ),
         // 10. CTE (Common Table Expression)
-        ("CTE", r#"
+        (
+            "CTE",
+            r#"
             WITH active_products AS (
                 SELECT * FROM products WHERE active = true AND stock > 0
             ),
@@ -88,10 +117,13 @@ async fn main() -> Result<()> {
             SELECT ap.name, ap.price, COALESCE(pr.avg_rating, 0) as rating
             FROM active_products ap
             LEFT JOIN product_reviews pr ON ap.id = pr.product_id
-        "#, None),
-
+        "#,
+            None,
+        ),
         // 11. Window function
-        ("Window Function", r#"
+        (
+            "Window Function",
+            r#"
             SELECT
                 name,
                 price,
@@ -99,10 +131,13 @@ async fn main() -> Result<()> {
                 ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY price DESC) as price_rank
             FROM products
             WHERE active = true
-        "#, None),
-
+        "#,
+            None,
+        ),
         // 12. Complex nested query
-        ("Complex Nested", r#"
+        (
+            "Complex Nested",
+            r#"
             SELECT
                 u.name,
                 u.email,
@@ -122,23 +157,37 @@ async fn main() -> Result<()> {
             ) order_stats ON u.id = order_stats.user_id
             WHERE u.active = true
             ORDER BY order_stats.total_spent DESC NULLS LAST
-        "#, Some(vec!["email".to_string()])),
-
+        "#,
+            Some(vec!["email".to_string()]),
+        ),
         // 13. JSONB operations
-        ("JSONB Query", "SELECT id, name, metadata->>'department' as department FROM users WHERE metadata->>'department' IS NOT NULL", Some(vec!["id".to_string()])),
-
+        (
+            "JSONB Query",
+            "SELECT id, name, metadata->>'department' as department FROM users WHERE metadata->>'department' IS NOT NULL",
+            Some(vec!["id".to_string()]),
+        ),
         // 14. Array operations
-        ("Array Query", "SELECT name, tags FROM products WHERE 'apple' = ANY(tags)", Some(vec!["id".to_string()])),
-
+        (
+            "Array Query",
+            "SELECT name, tags FROM products WHERE 'apple' = ANY(tags)",
+            Some(vec!["id".to_string()]),
+        ),
         // 15. DISTINCT
-        ("DISTINCT", "SELECT DISTINCT status FROM orders ORDER BY status", None),
-
+        (
+            "DISTINCT",
+            "SELECT DISTINCT status FROM orders ORDER BY status",
+            None,
+        ),
         // 16. UNION
-        ("UNION", r#"
+        (
+            "UNION",
+            r#"
             SELECT name, 'product' as type FROM products WHERE active = true
             UNION ALL
             SELECT name, 'category' as type FROM categories
-        "#, None),
+        "#,
+            None,
+        ),
     ];
 
     let mut passed = 0;

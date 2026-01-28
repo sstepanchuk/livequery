@@ -5,8 +5,8 @@ use bytes::Bytes;
 use futures::StreamExt;
 use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationEvent, TlsConfig};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Duration;
 use tracing::{debug, error, info, trace};
 use url::Url;
@@ -137,25 +137,25 @@ impl WalStreamer {
                                 client.update_applied_lsn(wal_end);
                             }
                             WalChange::Insert { rel, row } | WalChange::Update { rel, row } => {
-                                if let Some(t) = self.decoder.get_table(rel) {
-                                    if subs.has_table(t) {
-                                        tx.entry(Arc::from(t)).or_default().push(row);
-                                    }
+                                if let Some(t) = self.decoder.get_table(rel)
+                                    && subs.has_table(t)
+                                {
+                                    tx.entry(Arc::from(t)).or_default().push(row);
                                 }
                             }
                             WalChange::Delete { rel } => {
-                                if let Some(t) = self.decoder.get_table(rel) {
-                                    if subs.has_table(t) {
-                                        tx.entry(Arc::from(t)).or_default();
-                                    }
+                                if let Some(t) = self.decoder.get_table(rel)
+                                    && subs.has_table(t)
+                                {
+                                    tx.entry(Arc::from(t)).or_default();
                                 }
                             }
                             WalChange::Truncate { rels } => {
                                 for r in rels {
-                                    if let Some(t) = self.decoder.get_table(r) {
-                                        if subs.has_table(t) {
-                                            tx.entry(Arc::from(t)).or_default();
-                                        }
+                                    if let Some(t) = self.decoder.get_table(r)
+                                        && subs.has_table(t)
+                                    {
+                                        tx.entry(Arc::from(t)).or_default();
                                     }
                                 }
                             }

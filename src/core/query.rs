@@ -191,10 +191,10 @@ fn extract_join_info(
 fn extract_factor(f: &TableFactor, t: &mut Vec<String>, has_subq: &mut bool) {
     match f {
         TableFactor::Table { name, .. } => {
-            if let Some(i) = name.0.last() {
-                if let Some(ident) = i.as_ident() {
-                    t.push(ident.value.to_lowercase());
-                }
+            if let Some(i) = name.0.last()
+                && let Some(ident) = i.as_ident()
+            {
+                t.push(ident.value.to_lowercase());
             }
         }
         TableFactor::Derived { subquery, .. } => {
@@ -215,10 +215,10 @@ fn extract_factor(f: &TableFactor, t: &mut Vec<String>, has_subq: &mut bool) {
 // === WHERE Filter Extraction ===
 
 fn extract_where(q: &Query) -> WhereFilter {
-    if let SetExpr::Select(s) = q.body.as_ref() {
-        if let Some(sel) = s.selection.as_ref() {
-            return parse_expr(sel);
-        }
+    if let SetExpr::Select(s) = q.body.as_ref()
+        && let Some(sel) = s.selection.as_ref()
+    {
+        return parse_expr(sel);
     }
     WhereFilter::None
 }

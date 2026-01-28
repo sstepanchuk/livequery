@@ -1,13 +1,13 @@
 //! Performance Benchmarks - run with: cargo bench
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use rustc_hash::FxHasher;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use livequery_server::core::event::{EventBatch, SubscribeEvent};
-use livequery_server::core::query::{analyze, EvalResult};
+use livequery_server::core::query::{EvalResult, analyze};
 use livequery_server::core::row::{RowData, RowValue};
 use livequery_server::core::subscription::Snapshot;
 use livequery_server::infra::PgOutputDecoder;

@@ -3,10 +3,10 @@
 use anyhow::{Context, Result};
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use serde_json::Value;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant};
-use tokio_postgres::{types::Type, NoTls, Row};
+use tokio_postgres::{NoTls, Row, types::Type};
 use tracing::{debug, warn};
 
 use crate::core::config;

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::core::Config;
 
