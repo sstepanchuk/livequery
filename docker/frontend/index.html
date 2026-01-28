@@ -3,64 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiveQuery</title>
+    <title>LiveQuery Console</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
     <style>
-        :root { --bg: #111; --card: #1a1a1a; --border: #333; --text: #eee; --muted: #888; --accent: #10b981; --ok: #22c55e; --err: #ef4444; }
+        :root { --bg: #09090b; --card: #18181b; --border: #27272a; --text: #fafafa; --muted: #71717a; --accent: #10b981; --ok: #22c55e; --err: #ef4444; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font: 12px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+        body { font: 13px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         .app { display: flex; flex-direction: column; height: 100vh; }
         
-        header { padding: 6px 10px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-        .logo { font-weight: 700; color: var(--accent); }
-        .status { padding: 2px 8px; border-radius: 10px; font-size: 10px; }
-        .status.on { background: #052e16; color: #22c55e; }
-        .status.off { background: #450a0a; color: #fca5a5; }
-        .stats { margin-left: auto; font-size: 11px; color: var(--muted); }
-        .stats b { color: var(--text); margin-right: 2px; }
+        header { padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+        .logo { font-weight: 700; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+        .logo::before { content: '⚡'; }
+        .status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .status.on { background: rgba(34,197,94,.15); color: var(--ok); }
+        .status.off { background: rgba(239,68,68,.15); color: #fca5a5; }
+        .stats { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 16px; }
+        .stat { display: flex; align-items: center; gap: 4px; }
+        .stat b { color: var(--text); font-weight: 600; }
+        .stat.latency b { color: var(--accent); }
         
-        nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); }
-        nav button { padding: 8px 12px; font-size: 11px; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+        nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); padding: 0 8px; }
+        nav button { padding: 10px 16px; font-size: 12px; font-weight: 500; background: none; border: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
         nav button:hover { color: var(--text); }
         nav button.on { color: var(--accent); border-color: var(--accent); }
         
         main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .panel { display: none; padding: 10px; overflow: auto; }
-        .panel.on { display: block; }
+        .panel { display: none; flex: 1; flex-direction: column; padding: 16px; overflow: auto; }
+        .panel.on { display: flex; }
         
-        input, select, textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; }
-        textarea { font-family: monospace; font-size: 11px; min-height: 60px; resize: vertical; }
-        label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
-        .field { margin-bottom: 10px; }
-        .row { display: flex; gap: 10px; }
+        input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; transition: border-color .15s; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        textarea { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; min-height: 80px; resize: vertical; }
+        label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+        .field { margin-bottom: 16px; }
+        .row { display: flex; gap: 12px; }
         .row > * { flex: 1; }
         
-        button { padding: 6px 12px; border: none; border-radius: 4px; font: inherit; cursor: pointer; }
+        button { padding: 10px 16px; border: none; border-radius: 6px; font: inherit; font-weight: 500; cursor: pointer; transition: all .15s; }
+        button:hover { transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
         .primary { background: var(--accent); color: #000; }
         .success { background: var(--ok); color: #000; }
-        .ghost { background: none; border: 1px solid var(--border); color: var(--muted); }
-        .ghost:hover { background: var(--border); }
-        button:disabled { opacity: .5; }
+        .ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+        .ghost:hover { border-color: var(--accent); color: var(--accent); background: transparent; }
+        button:disabled { opacity: .5; pointer-events: none; }
         
-        .data { flex: 1; overflow: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--muted); font-size: 10px; text-transform: uppercase; position: sticky; top: 0; background: var(--bg); }
-        td { font-family: monospace; }
-        .empty { color: var(--muted); text-align: center; padding: 40px; }
+        .data { flex: 1; overflow: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--card); }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; background: var(--card); }
+        td { font-family: 'SF Mono', monospace; font-size: 11px; }
+        tr:hover td { background: rgba(255,255,255,.02); }
+        .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
+        .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: .5; }
+        .empty-text { font-size: 13px; }
         
-        .log { font-family: monospace; font-size: 11px; }
-        .log div { padding: 3px 0; border-bottom: 1px solid #222; }
-        .log .t { color: var(--muted); margin-right: 8px; }
+        .log { flex: 1; font-family: 'SF Mono', monospace; font-size: 11px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
+        .log-entry { padding: 4px 0; display: flex; gap: 12px; }
+        .log-entry + .log-entry { border-top: 1px solid var(--border); }
+        .log .t { color: var(--muted); flex-shrink: 0; }
         .log .ok { color: var(--ok); }
         .log .err { color: var(--err); }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .log-header h3 { font-size: 12px; font-weight: 600; color: var(--muted); }
         
-        .subs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-        .sub { padding: 4px 8px; background: var(--card); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; cursor: pointer; }
-        .sub.on { border-color: var(--ok); }
-        .sub .x { color: var(--err); margin-left: 6px; }
+        .subs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 32px; }
+        .sub { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all .15s; }
+        .sub:hover { border-color: var(--muted); }
+        .sub.on { border-color: var(--ok); background: rgba(34,197,94,.05); }
+        .sub .mode { font-size: 9px; padding: 2px 6px; background: var(--border); border-radius: 4px; color: var(--muted); text-transform: uppercase; }
+        .sub .x { color: var(--err); cursor: pointer; font-size: 14px; line-height: 1; }
+        .sub .x:hover { color: #f87171; }
         
-        .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-        .actions button { font-size: 11px; padding: 4px 8px; }
+        .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+        .actions button { font-size: 12px; padding: 8px 12px; }
+        
+        .result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 6px; font-size: 12px; }
+        .result.ok { border-left: 3px solid var(--ok); color: var(--ok); }
+        .result.err { border-left: 3px solid var(--err); color: var(--err); }
     </style>
 </head>
 <body>
@@ -70,9 +90,9 @@
             <span id="status" class="status off">offline</span>
             <button class="primary" id="connectBtn">Connect</button>
             <div class="stats">
-                <b id="nSubs">0</b>subs
-                <b id="nRows">0</b>rows
-                <b id="latency">-</b>
+                <div class="stat"><span>Subs:</span><b id="nSubs">0</b></div>
+                <div class="stat"><span>Rows:</span><b id="nRows">0</b></div>
+                <div class="stat latency"><span>Latency:</span><b id="latency">—</b></div>
             </div>
         </header>
         
@@ -86,15 +106,21 @@
         <main>
             <div class="panel on" id="dataPanel">
                 <div class="subs" id="subs"></div>
-                <div class="data" id="data"><div class="empty">No subscriptions</div></div>
+                <div class="data" id="data">
+                    <div class="empty">
+                        <div class="empty-icon">📭</div>
+                        <div class="empty-text">No active subscriptions<br><span style="color:var(--muted)">Go to Subscribe tab to create one</span></div>
+                    </div>
+                </div>
             </div>
             
             <div class="panel" id="subscribePanel">
                 <div class="row">
                     <div class="field">
-                        <label>Preset</label>
+                        <label>Preset Query</label>
                         <select id="preset">
                             <option value="SELECT * FROM orders WHERE status = 'pending'">Orders (pending)</option>
+                            <option value="SELECT * FROM orders WHERE status = 'shipped'">Orders (shipped)</option>
                             <option value="SELECT * FROM orders">Orders (all)</option>
                             <option value="SELECT * FROM products WHERE active = true">Products (active)</option>
                             <option value="SELECT * FROM users">Users</option>
@@ -103,13 +129,13 @@
                     <div class="field">
                         <label>Mode</label>
                         <select id="mode">
-                            <option value="events">Events</option>
-                            <option value="snapshot">Snapshot</option>
+                            <option value="events">Events (differential)</option>
+                            <option value="snapshot">Snapshot (full sync)</option>
                         </select>
                     </div>
                 </div>
                 <div class="field">
-                    <label>Query</label>
+                    <label>SQL Query</label>
                     <textarea id="query">SELECT * FROM orders WHERE status = 'pending'</textarea>
                 </div>
                 <button class="success" id="subBtn" disabled>Subscribe</button>
@@ -117,19 +143,24 @@
             
             <div class="panel" id="sqlPanel">
                 <div class="field">
-                    <label>SQL</label>
-                    <textarea id="sql">INSERT INTO orders (user_id, product, amount, status) VALUES (1, 'Test', 99.99, 'pending')</textarea>
+                    <label>SQL Statement</label>
+                    <textarea id="sql">INSERT INTO orders (user_id, product, amount, status) VALUES (1, 'Test Product', 99.99, 'pending')</textarea>
                 </div>
                 <button class="primary" id="execBtn">Execute</button>
-                <div id="sqlResult" style="margin-top:8px;font-size:11px;color:var(--muted);"></div>
+                <div id="sqlResult"></div>
                 <div class="actions">
-                    <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Order</button>
-                    <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship</button>
-                    <button class="ghost" data-sql="DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)">Delete</button>
+                    <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Insert Order</button>
+                    <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship First</button>
+                    <button class="ghost" data-sql="UPDATE orders SET status = 'completed' WHERE id = (SELECT id FROM orders WHERE status = 'shipped' LIMIT 1)">Complete First</button>
+                    <button class="ghost" data-sql="DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)">Delete Last</button>
                 </div>
             </div>
             
             <div class="panel" id="logPanel">
+                <div class="log-header">
+                    <h3>Event Log</h3>
+                    <button class="ghost" id="clearLog" style="padding:6px 10px;font-size:11px;">Clear</button>
+                </div>
                 <div class="log" id="log"></div>
             </div>
         </main>
@@ -146,17 +177,26 @@
         
         const log = (msg, cls = '') => {
             const t = new Date().toLocaleTimeString('en-GB', {hour12:false});
-            $('log').innerHTML = `<div><span class="t">${t}</span><span class="${cls}">${msg}</span></div>` + $('log').innerHTML;
+            $('log').innerHTML = `<div class="log-entry"><span class="t">${t}</span><span class="${cls}">${msg}</span></div>` + $('log').innerHTML;
         };
         
         const render = () => {
             $('nSubs').textContent = subs.size;
             $('subs').innerHTML = subs.size ? [...subs].map(([id, s]) => 
-                `<span class="sub ${id===active?'on':''}" onclick="sel('${id}')">${s.q.slice(0,25)}… (${s.rows.size})<span class="x" onclick="event.stopPropagation();unsub('${id}')">×</span></span>`
+                `<span class="sub ${id===active?'on':''}" onclick="sel('${id}')">
+                    ${s.q.slice(0,30)}… 
+                    <span class="mode">${s.mode}</span>
+                    <span style="color:var(--muted)">(${s.rows.size})</span>
+                    <span class="x" onclick="event.stopPropagation();unsub('${id}')">×</span>
+                </span>`
             ).join('') : '';
             
             const s = subs.get(active);
-            if (!s || !s.rows.size) { $('data').innerHTML = '<div class="empty">No data</div>'; $('nRows').textContent = 0; return; }
+            if (!s || !s.rows.size) { 
+                $('data').innerHTML = `<div class="empty"><div class="empty-icon">${subs.size ? '📭' : '📋'}</div><div class="empty-text">${subs.size ? 'No matching rows' : 'No active subscriptions'}<br><span style="color:var(--muted)">${subs.size ? 'Waiting for data...' : 'Go to Subscribe tab to create one'}</span></div></div>`; 
+                $('nRows').textContent = 0; 
+                return; 
+            }
             
             const rows = [...s.rows.values()], cols = Object.keys(rows[0]);
             $('nRows').textContent = rows.length;
@@ -166,7 +206,7 @@
         window.sel = id => { active = id; render(); };
         window.unsub = async id => {
             if (!nc) return;
-            try { await nc.request(`livequery.${id}.unsubscribe`, sc.encode(JSON.stringify({subscription_id:id})), {timeout:5000}); } catch {}
+            try { await nc.request(`livequery.${id}.unsubscribe`, sc.encode(JSON.stringify({subscription_id:id})), {timeout:5000}); log('Unsubscribed', 'ok'); } catch {}
             subs.get(id)?.sub?.unsubscribe();
             subs.delete(id);
             if (active === id) active = subs.keys().next().value || null;
@@ -174,13 +214,14 @@
         };
         
         $('connectBtn').onclick = async () => {
-            if (nc) { await nc.close(); nc = null; $('status').className = 'status off'; $('status').textContent = 'offline'; $('connectBtn').textContent = 'Connect'; $('subBtn').disabled = true; return; }
+            if (nc) { await nc.close(); nc = null; $('status').className = 'status off'; $('status').textContent = 'offline'; $('connectBtn').textContent = 'Connect'; $('subBtn').disabled = true; log('Disconnected'); return; }
+            $('connectBtn').disabled = true; $('connectBtn').textContent = 'Connecting...';
             try {
                 nc = await connect({ servers: $('natsUrl').value });
                 $('status').className = 'status on'; $('status').textContent = 'online';
-                $('connectBtn').textContent = 'Disconnect'; $('subBtn').disabled = false;
-                log('Connected', 'ok');
-            } catch (e) { log('Failed: ' + e.message, 'err'); }
+                $('connectBtn').textContent = 'Disconnect'; $('connectBtn').disabled = false; $('subBtn').disabled = false;
+                log('Connected to NATS', 'ok');
+            } catch (e) { log('Connection failed: ' + e.message, 'err'); $('connectBtn').textContent = 'Connect'; $('connectBtn').disabled = false; }
         };
         
         $('subBtn').onclick = async () => {
@@ -188,10 +229,11 @@
             const q = $('query').value.trim(), mode = $('mode').value;
             if (!q) return;
             
+            $('subBtn').disabled = true; $('subBtn').textContent = 'Subscribing...';
             const id = `w${Date.now()}-${++cnt}`;
             try {
                 const res = JSON.parse(sc.decode((await nc.request(`livequery.${id}.subscribe`, sc.encode(JSON.stringify({subscription_id:id, query:q, mode})), {timeout:10000})).data));
-                if (!res.success) { log(res.error, 'err'); return; }
+                if (!res.success) { log('Error: ' + res.error, 'err'); $('subBtn').disabled = false; $('subBtn').textContent = 'Subscribe'; return; }
                 
                 const s = { q, mode, rows: new Map(), sub: null };
                 (res.snapshot || res.rows || []).forEach(r => { const d = r.data || r; s.rows.set(d.id ?? JSON.stringify(d), d); });
@@ -208,22 +250,26 @@
                 })();
                 
                 subs.set(id, s); active = id; render(); switchTab('data');
-                log('Subscribed: ' + q.slice(0, 30), 'ok');
-            } catch (e) { log(e.message, 'err'); }
+                log('Subscribed: ' + q.slice(0, 40) + '...', 'ok');
+            } catch (e) { log('Subscribe error: ' + e.message, 'err'); }
+            $('subBtn').disabled = false; $('subBtn').textContent = 'Subscribe';
         };
         
         const execSql = async sql => {
-            $('sqlResult').textContent = '...';
+            const el = $('sqlResult');
+            el.className = 'result'; el.textContent = 'Executing...';
             try {
                 const r = await (await fetch('http://localhost:3001/sql', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sql}) })).json();
-                $('sqlResult').textContent = r.error ? 'Error: ' + r.error : 'OK (' + r.rowCount + ')';
-                $('sqlResult').style.color = r.error ? 'var(--err)' : 'var(--ok)';
-            } catch { $('sqlResult').textContent = 'Error'; $('sqlResult').style.color = 'var(--err)'; }
+                el.className = r.error ? 'result err' : 'result ok';
+                el.textContent = r.error ? 'Error: ' + r.error : 'Success: ' + r.rowCount + ' row(s) affected';
+                log(r.error ? 'SQL error' : 'SQL executed', r.error ? 'err' : 'ok');
+            } catch { el.className = 'result err'; el.textContent = 'Connection error'; }
         };
         
         $('execBtn').onclick = () => execSql($('sql').value);
         document.querySelectorAll('[data-sql]').forEach(b => b.onclick = () => { $('sql').value = b.dataset.sql; execSql(b.dataset.sql); });
         $('preset').onchange = e => $('query').value = e.target.value;
+        $('clearLog').onclick = () => $('log').innerHTML = '';
         
         const switchTab = tab => {
             document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
