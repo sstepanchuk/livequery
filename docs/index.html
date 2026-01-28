@@ -49,8 +49,7 @@
         .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         .feature { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color .2s; }
         .feature:hover { border-color: var(--accent); }
-        .feature-icon { width: 40px; height: 40px; background: rgba(16, 185, 129, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 20px; }
-        .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+                .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
         .feature p { font-size: 14px; color: var(--muted); line-height: 1.6; }
         
         .install { display: grid; gap: 16px; }
@@ -123,22 +122,18 @@ nats.<span class="f">subscribe</span>(res.subject, (msg) =&gt; {
             <h2>Features</h2>
             <div class="features">
                 <div class="feature">
-                    <div class="feature-icon">📝</div>
                     <h3>Plain SQL</h3>
                     <p>No new query languages. Write standard SQL and subscribe to results in real-time.</p>
                 </div>
                 <div class="feature">
-                    <div class="feature-icon">⚡</div>
                     <h3>Low Latency</h3>
                     <p>Native PostgreSQL WAL streaming with sub-10ms change detection.</p>
                 </div>
                 <div class="feature">
-                    <div class="feature-icon">🔗</div>
                     <h3>Shared Queries</h3>
                     <p>Identical queries share one snapshot. Scales efficiently with many clients.</p>
                 </div>
                 <div class="feature">
-                    <div class="feature-icon">🔄</div>
                     <h3>Two Modes</h3>
                     <p>Events mode for differential updates, Snapshot mode for full data sync.</p>
                 </div>

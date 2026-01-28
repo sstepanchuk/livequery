@@ -13,8 +13,7 @@
         
         header { padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
         .logo { font-weight: 700; font-size: 16px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
-        .logo::before { content: '⚡'; }
-        .status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+                .status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .status.on { background: rgba(34,197,94,.15); color: var(--ok); }
         .status.off { background: rgba(239,68,68,.15); color: #fca5a5; }
         .stats { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; gap: 16px; }
@@ -55,7 +54,6 @@
         td { font-family: 'SF Mono', monospace; font-size: 12px; }
         tr:hover td { background: rgba(255,255,255,.02); }
         .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
-        .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: .5; }
         .empty-text { font-size: 14px; }
         
         .log { flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
@@ -108,8 +106,7 @@
                 <div class="subs" id="subs"></div>
                 <div class="data" id="data">
                     <div class="empty">
-                        <div class="empty-icon">📭</div>
-                        <div class="empty-text">No active subscriptions<br><span style="color:var(--muted)">Go to Subscribe tab to create one</span></div>
+                                                <div class="empty-text">No active subscriptions<br><span style="color:var(--muted)">Go to Subscribe tab to create one</span></div>
                     </div>
                 </div>
             </div>
@@ -193,7 +190,7 @@
             
             const s = subs.get(active);
             if (!s || !s.rows.size) { 
-                $('data').innerHTML = `<div class="empty"><div class="empty-icon">${subs.size ? '📭' : '📋'}</div><div class="empty-text">${subs.size ? 'No matching rows' : 'No active subscriptions'}<br><span style="color:var(--muted)">${subs.size ? 'Waiting for data...' : 'Go to Subscribe tab to create one'}</span></div></div>`; 
+                $('data').innerHTML = `<div class="empty"><div class="empty-text">${subs.size ? 'No matching rows' : 'No active subscriptions'}<br><span style="color:var(--muted)">${subs.size ? 'Waiting for data...' : 'Go to Subscribe tab to create one'}</span></div></div>`; 
                 $('nRows').textContent = 0; 
                 return; 
             }
