@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LiveQuery Console</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
     <style>
         :root { --bg: #09090b; --card: #18181b; --border: #27272a; --text: #fafafa; --muted: #71717a; --accent: #10b981; --ok: #22c55e; --err: #ef4444; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -79,6 +81,11 @@
         .result { margin-top: 12px; padding: 12px; background: var(--card); border-radius: 6px; font-size: 13px; }
         .result.ok { border-left: 3px solid var(--ok); color: var(--ok); }
         .result.err { border-left: 3px solid var(--err); color: var(--err); }
+        
+        .CodeMirror { height: auto; min-height: 80px; max-height: 200px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+        .CodeMirror-focused { border-color: var(--accent); }
+        .query-section { display: flex; flex-direction: column; gap: 16px; }
+        .query-section .data { min-height: 200px; flex: 1; }
     </style>
 </head>
 <body>
@@ -95,62 +102,45 @@
         </header>
         
         <nav>
-            <button class="on" data-tab="data">Data</button>
-            <button data-tab="subscribe">Subscribe</button>
-            <button data-tab="sql">SQL</button>
+            <button class="on" data-tab="query">Query</button>
             <button data-tab="log">Log</button>
             <button data-tab="settings">Settings</button>
         </nav>
         
         <main>
-            <div class="panel on" id="dataPanel">
+            <div class="panel on query-section" id="queryPanel">
                 <div class="subs" id="subs"></div>
-                <div class="data" id="data">
-                    <div class="empty">
-                                                <div class="empty-text">No active subscriptions<br><span style="color:var(--muted)">Go to Subscribe tab to create one</span></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel" id="subscribePanel">
+                
                 <div class="row">
-                    <div class="field">
-                        <label>Preset Query</label>
-                        <select id="preset">
-                            <option value="SELECT * FROM orders WHERE status = 'pending'">Orders (pending)</option>
-                            <option value="SELECT * FROM orders WHERE status = 'shipped'">Orders (shipped)</option>
-                            <option value="SELECT * FROM orders">Orders (all)</option>
-                            <option value="SELECT * FROM products WHERE active = true">Products (active)</option>
-                            <option value="SELECT * FROM users">Users</option>
-                        </select>
+                    <div class="field" style="flex:2">
+                        <label>SQL Query</label>
+                        <textarea id="query">SELECT * FROM orders WHERE status = 'pending'</textarea>
                     </div>
-                    <div class="field">
+                    <div class="field" style="flex:0 0 140px">
                         <label>Mode</label>
                         <select id="mode">
-                            <option value="events">Events (differential)</option>
-                            <option value="snapshot">Snapshot (full sync)</option>
+                            <option value="events">Events</option>
+                            <option value="snapshot">Snapshot</option>
                         </select>
                     </div>
                 </div>
-                <div class="field">
-                    <label>SQL Query</label>
-                    <textarea id="query">SELECT * FROM orders WHERE status = 'pending'</textarea>
+                
+                <div class="actions" style="margin-top:0">
+                    <button class="success" id="subBtn" disabled>Subscribe</button>
+                    <button class="primary" id="execBtn">Execute</button>
+                    <span style="border-left:1px solid var(--border);margin:0 4px"></span>
+                    <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Insert</button>
+                    <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship</button>
+                    <button class="ghost" data-sql="UPDATE orders SET status = 'completed' WHERE id = (SELECT id FROM orders WHERE status = 'shipped' LIMIT 1)">Complete</button>
+                    <button class="ghost" data-sql="DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)">Delete</button>
                 </div>
-                <button class="success" id="subBtn" disabled>Subscribe</button>
-            </div>
-            
-            <div class="panel" id="sqlPanel">
-                <div class="field">
-                    <label>SQL Statement</label>
-                    <textarea id="sql">INSERT INTO orders (user_id, product, amount, status) VALUES (1, 'Test Product', 99.99, 'pending')</textarea>
-                </div>
-                <button class="primary" id="execBtn">Execute</button>
+                
                 <div id="sqlResult"></div>
-                <div class="actions">
-                    <button class="ghost" data-sql="INSERT INTO orders (user_id, product, amount, status) VALUES (floor(random()*4+1)::int, 'Product', round((random()*500+50)::numeric, 2), 'pending')">+ Insert Order</button>
-                    <button class="ghost" data-sql="UPDATE orders SET status = 'shipped' WHERE id = (SELECT id FROM orders WHERE status = 'pending' LIMIT 1)">Ship First</button>
-                    <button class="ghost" data-sql="UPDATE orders SET status = 'completed' WHERE id = (SELECT id FROM orders WHERE status = 'shipped' LIMIT 1)">Complete First</button>
-                    <button class="ghost" data-sql="DELETE FROM orders WHERE id = (SELECT MAX(id) FROM orders)">Delete Last</button>
+                
+                <div class="data" id="data">
+                    <div class="empty">
+                        <div class="empty-text">No active subscriptions<br><span style="color:var(--muted)">Write a SELECT query and click Subscribe</span></div>
+                    </div>
                 </div>
             </div>
             
@@ -180,12 +170,23 @@
         </main>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
     <script type="module">
         import { connect, StringCodec } from 'https://unpkg.com/nats.ws@1.30.3/esm/nats.js';
         const sc = StringCodec();
         
         let nc = null, subs = new Map(), active = null, cnt = 0;
         const $ = id => document.getElementById(id);
+        
+        // SQL Editor with syntax highlighting
+        const editor = CodeMirror.fromTextArea($('query'), {
+            mode: 'text/x-pgsql',
+            theme: 'material-darker',
+            lineNumbers: false,
+            lineWrapping: true
+        });
+        editor.setValue("SELECT * FROM orders WHERE status = 'pending'");
         
         const log = (msg, cls = '') => {
             const t = new Date().toLocaleTimeString('en-GB', {hour12:false});
@@ -238,7 +239,7 @@
         
         $('subBtn').onclick = async () => {
             if (!nc) return;
-            const q = $('query').value.trim(), mode = $('mode').value;
+            const q = editor.getValue().trim(), mode = $('mode').value;
             if (!q) return;
             
             $('subBtn').disabled = true; $('subBtn').textContent = 'Subscribing...';
@@ -261,7 +262,7 @@
                     }
                 })();
                 
-                subs.set(id, s); active = id; render(); switchTab('data');
+                subs.set(id, s); active = id; render();
                 log('Subscribed: ' + q.slice(0, 40) + '...', 'ok');
             } catch (e) { log('Subscribe error: ' + e.message, 'err'); }
             $('subBtn').disabled = false; $('subBtn').textContent = 'Subscribe';
@@ -278,9 +279,8 @@
             } catch { el.className = 'result err'; el.textContent = 'Connection error'; }
         };
         
-        $('execBtn').onclick = () => execSql($('sql').value);
-        document.querySelectorAll('[data-sql]').forEach(b => b.onclick = () => { $('sql').value = b.dataset.sql; execSql(b.dataset.sql); });
-        $('preset').onchange = e => $('query').value = e.target.value;
+        $('execBtn').onclick = () => execSql(editor.getValue());
+        document.querySelectorAll('[data-sql]').forEach(b => b.onclick = () => { editor.setValue(b.dataset.sql); execSql(b.dataset.sql); });
         $('clearLog').onclick = () => $('log').innerHTML = '';
         
         // localStorage
@@ -310,7 +310,7 @@
             ).join('') : '<span style="color:var(--muted)">No saved queries</span>';
         };
         
-        window.useQuery = i => { const q = (LS.get('queries') || [])[i]; if (q) { $('query').value = q; switchTab('subscribe'); } };
+        window.useQuery = i => { const q = (LS.get('queries') || [])[i]; if (q) { editor.setValue(q); } };
         window.delQuery = i => { const saved = LS.get('queries') || []; saved.splice(i, 1); LS.set('queries', saved); renderSaved(); };
         
         $('saveSettings').onclick = () => { LS.set('natsUrl', $('natsUrl').value); log('Settings saved', 'ok'); };
@@ -318,7 +318,7 @@
         
         // Save query on subscribe
         const origSubBtn = $('subBtn').onclick;
-        $('subBtn').onclick = async () => { saveQuery($('query').value.trim()); await origSubBtn(); };
+        $('subBtn').onclick = async () => { saveQuery(editor.getValue().trim()); await origSubBtn(); };
         
         const switchTab = tab => {
             document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
