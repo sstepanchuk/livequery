@@ -5,6 +5,8 @@ Real-time SQL query subscriptions for PostgreSQL via NATS.
 [![CI](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml/badge.svg)](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml)
 [![Release](https://github.com/sstepanchuk/livequery/actions/workflows/release.yml/badge.svg)](https://github.com/sstepanchuk/livequery/releases)
 
+> ⚠️ **Alpha Version** — This project is under active development and testing. API may change. Not recommended for production use yet.
+
 ## What is it?
 
 LiveQuery lets you subscribe to SQL query results. When data changes in PostgreSQL, clients automatically receive updates.

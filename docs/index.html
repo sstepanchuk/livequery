@@ -23,6 +23,7 @@
         .logo span { color: var(--accent); }
         .tagline { font-size: 1.25rem; color: var(--muted); max-width: 480px; margin: 0 auto 40px; line-height: 1.5; }
         
+        .alpha-badge { display: inline-block; padding: 8px 16px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; color: #fbbf24; font-size: 13px; font-weight: 500; margin-bottom: 24px; }
         .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
         .badges img { height: 22px; border-radius: 4px; }
         
@@ -78,6 +79,8 @@
         <header>
             <div class="logo">Live<span>Query</span></div>
             <p class="tagline">Real-time SQL subscriptions for PostgreSQL. Subscribe to any query, get live updates via NATS.</p>
+            
+            <div class="alpha-badge">⚠️ Alpha — Under active development</div>
             
             <div class="badges">
                 <a href="https://github.com/sstepanchuk/livequery/actions"><img src="https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
