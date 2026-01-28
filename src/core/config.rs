@@ -169,6 +169,7 @@ fn gen_id() -> String {
 
 /// Builder pattern for Config (useful for testing)
 #[derive(Default)]
+#[allow(dead_code)] // API for testing/embedding
 pub struct ConfigBuilder {
     server_id: Option<String>,
     log_level: Option<String>,
@@ -185,6 +186,7 @@ pub struct ConfigBuilder {
     wal_publication: Option<String>,
 }
 
+#[allow(dead_code)] // API for testing/embedding
 impl ConfigBuilder {
     pub fn new() -> Self {
         Self::default()
@@ -272,6 +274,7 @@ impl ConfigBuilder {
 
 impl Config {
     /// Create a builder for Config
+    #[allow(dead_code)] // API for testing/embedding
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder::new()
     }

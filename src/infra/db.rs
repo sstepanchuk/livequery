@@ -16,7 +16,7 @@ use crate::core::row::{RowData, RowValue};
 static COL_NAMES: std::sync::LazyLock<
     dashmap::DashMap<String, Arc<str>, rustc_hash::FxBuildHasher>,
 > = std::sync::LazyLock::new(
-    || dashmap::DashMap::with_hasher(rustc_hash::FxBuildHasher::default()),
+    || dashmap::DashMap::with_hasher(rustc_hash::FxBuildHasher),
 );
 
 /// Intern column name for reuse across queries (public for wal.rs)
@@ -80,13 +80,13 @@ fn row_to_typed(row: &Row, cols: Arc<[Arc<str>]>, col_types: &[Type], use_index:
                 .try_get::<_, Option<String>>(i)
                 .ok()
                 .flatten()
-                .map(|s| RowValue::from_str(&s)),
+                .map(|s| RowValue::intern_str(&s)),
 
             Type::UUID => row
                 .try_get::<_, Option<uuid::Uuid>>(i)
                 .ok()
                 .flatten()
-                .map(|u| RowValue::from_str(&u.to_string())),
+                .map(|u| RowValue::intern_str(&u.to_string())),
 
             Type::JSON | Type::JSONB => row
                 .try_get::<_, Option<Value>>(i)
@@ -98,22 +98,22 @@ fn row_to_typed(row: &Row, cols: Arc<[Arc<str>]>, col_types: &[Type], use_index:
                 .try_get::<_, Option<chrono::NaiveDateTime>>(i)
                 .ok()
                 .flatten()
-                .map(|t| RowValue::from_str(&t.to_string())),
+                .map(|t| RowValue::intern_str(&t.to_string())),
             Type::TIMESTAMPTZ => row
                 .try_get::<_, Option<chrono::DateTime<chrono::Utc>>>(i)
                 .ok()
                 .flatten()
-                .map(|t| RowValue::from_str(&t.to_rfc3339())),
+                .map(|t| RowValue::intern_str(&t.to_rfc3339())),
             Type::DATE => row
                 .try_get::<_, Option<chrono::NaiveDate>>(i)
                 .ok()
                 .flatten()
-                .map(|d| RowValue::from_str(&d.to_string())),
+                .map(|d| RowValue::intern_str(&d.to_string())),
             Type::TIME | Type::TIMETZ => row
                 .try_get::<_, Option<chrono::NaiveTime>>(i)
                 .ok()
                 .flatten()
-                .map(|t| RowValue::from_str(&t.to_string())),
+                .map(|t| RowValue::intern_str(&t.to_string())),
 
             Type::BYTEA => row
                 .try_get::<_, Option<Vec<u8>>>(i)
@@ -161,7 +161,7 @@ fn row_to_typed(row: &Row, cols: Arc<[Arc<str>]>, col_types: &[Type], use_index:
                 .map(|a| {
                     let mut out = Vec::with_capacity(a.len());
                     for s in a {
-                        out.push(RowValue::from_str(&s));
+                        out.push(RowValue::intern_str(&s));
                     }
                     RowValue::Array(out)
                 }),
@@ -170,7 +170,7 @@ fn row_to_typed(row: &Row, cols: Arc<[Arc<str>]>, col_types: &[Type], use_index:
                 .try_get::<_, Option<String>>(i)
                 .ok()
                 .flatten()
-                .map(|s| RowValue::from_str(&s)),
+                .map(|s| RowValue::intern_str(&s)),
         };
         values.push(v.unwrap_or(RowValue::Null));
     }

@@ -6,7 +6,7 @@ use std::sync::{Arc, LazyLock, OnceLock};
 
 const INTERN_MAX_LEN: usize = 32;
 static STR_INTERN: LazyLock<DashMap<String, Arc<str>, FxBuildHasher>> =
-    LazyLock::new(|| DashMap::with_hasher(FxBuildHasher::default()));
+    LazyLock::new(|| DashMap::with_hasher(FxBuildHasher));
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RowValue {
@@ -50,6 +50,7 @@ impl RowData {
     }
 
     /// Create RowData from JSON Value (for benchmarks and testing)
+    #[allow(dead_code)] // Used in benchmarks
     pub fn from_value(v: &Value) -> Self {
         let obj = v.as_object();
         let (cols, values): (Vec<Arc<str>>, Vec<RowValue>) = match obj {
@@ -131,17 +132,17 @@ impl RowValue {
                 } else if let Some(f) = n.as_f64() {
                     RowValue::Float(f)
                 } else {
-                    RowValue::from_str(&n.to_string())
+                    RowValue::intern_str(&n.to_string())
                 }
             }
-            Value::String(s) => RowValue::from_str(s),
+            Value::String(s) => RowValue::intern_str(s),
             Value::Array(a) => RowValue::Array(a.iter().map(RowValue::from_value).collect()),
             Value::Object(_) => RowValue::Json(v.clone()),
         }
     }
 
     #[inline(always)]
-    pub fn from_str(s: &str) -> RowValue {
+    pub fn intern_str(s: &str) -> RowValue {
         if s.len() <= INTERN_MAX_LEN {
             let arc = STR_INTERN
                 .entry(s.to_string())

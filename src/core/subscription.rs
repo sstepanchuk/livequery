@@ -53,6 +53,7 @@ pub struct SharedQuery {
     pub subscribers: RwLock<FxHashSet<Arc<str>>>,
 }
 
+#[derive(Default)]
 pub struct Snapshot {
     rows: FxHashMap<u64, RowEntry>,
 }
@@ -97,9 +98,9 @@ pub struct SubscribeResult {
 impl SubscriptionManager {
     pub fn new(max_subs: usize) -> Self {
         Self {
-            subs: Map::with_hasher(FxBuildHasher::default()),
-            queries: Map::with_hasher(FxBuildHasher::default()),
-            table_idx: Map::with_hasher(FxBuildHasher::default()),
+            subs: Map::with_hasher(FxBuildHasher),
+            queries: Map::with_hasher(FxBuildHasher),
+            table_idx: Map::with_hasher(FxBuildHasher),
             max_subs,
             subs_count: AtomicUsize::new(0),
         }
@@ -116,7 +117,7 @@ impl SubscriptionManager {
         // Atomic check-and-insert for subscription
         let sub_id: Arc<str> = sub_id.into();
         match self.subs.entry(sub_id.clone()) {
-            Entry::Occupied(_) => return Err(format!("Subscription '{}' already exists", sub_id)),
+            Entry::Occupied(_) => Err(format!("Subscription '{}' already exists", sub_id)),
             Entry::Vacant(entry) => {
                 if self.subs_count.load(Relaxed) >= self.max_subs {
                     return Err("Max subscriptions reached".into());
@@ -330,9 +331,7 @@ impl SharedQuery {
 impl Snapshot {
     #[inline]
     pub fn new() -> Self {
-        Self {
-            rows: FxHashMap::default(),
-        }
+        Self::default()
     }
 
     /// Initialize with typed rows - returns events for Events mode

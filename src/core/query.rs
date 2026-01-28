@@ -12,7 +12,7 @@ use std::sync::{Arc, LazyLock};
 
 // Use Arc to avoid cloning QueryAnalysis on cache hit
 static CACHE: LazyLock<DashMap<u64, Arc<QueryAnalysis>, FxBuildHasher>> =
-    LazyLock::new(|| DashMap::with_hasher(FxBuildHasher::default()));
+    LazyLock::new(|| DashMap::with_hasher(FxBuildHasher));
 
 /// Filter extracted from WHERE clause  
 /// Uses Box<str> for column names - smaller enum size, faster cloning

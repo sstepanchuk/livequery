@@ -257,20 +257,20 @@ fn parse_val(s: &str, oid: u32) -> RowValue {
         16 => match s.as_bytes().first() {
             Some(b't') => RowValue::Bool(true),
             Some(b'f') => RowValue::Bool(false),
-            _ => RowValue::from_str(s),
+            _ => RowValue::intern_str(s),
         },
         20 | 21 | 23 => s
             .parse()
             .map(RowValue::Int)
-            .unwrap_or_else(|_| RowValue::from_str(s)),
+            .unwrap_or_else(|_| RowValue::intern_str(s)),
         700 | 701 => s
             .parse()
             .map(RowValue::Float)
-            .unwrap_or_else(|_| RowValue::from_str(s)),
+            .unwrap_or_else(|_| RowValue::intern_str(s)),
         114 | 3802 => serde_json::from_str(s)
             .map(RowValue::Json)
-            .unwrap_or_else(|_| RowValue::from_str(s)),
-        _ => RowValue::from_str(s),
+            .unwrap_or_else(|_| RowValue::intern_str(s)),
+        _ => RowValue::intern_str(s),
     }
 }
 

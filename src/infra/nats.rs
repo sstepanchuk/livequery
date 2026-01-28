@@ -201,6 +201,7 @@ impl NatsHandler {
 
     /// Publish pre-serialized bytes to subscription subject (zero-copy)
     #[inline]
+    #[allow(dead_code)] // Kept for API completeness
     pub async fn publish_bytes(&self, sub_id: &str, bytes: Bytes) -> Result<()> {
         let subject = self.cfg.sub_events_subject(sub_id);
         self.msgs_out.fetch_add(1, Relaxed);

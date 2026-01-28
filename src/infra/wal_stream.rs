@@ -86,7 +86,7 @@ impl WalStreamer {
         let port = parsed.port().unwrap_or(5432);
 
         Ok(ReplicationConfig {
-            host: host.into(),
+            host,
             port,
             user,
             password,
@@ -201,16 +201,17 @@ impl WalStreamer {
                 };
 
                 // WHERE filter optimization
-                if q.is_simple && !rows.is_empty() && !matches!(q.filter, WhereFilter::None) {
-                    if !rows
+                if q.is_simple
+                    && !rows.is_empty()
+                    && !matches!(q.filter, WhereFilter::None)
+                    && !rows
                         .iter()
                         .any(|r| !matches!(q.filter.eval_row(r), EvalResult::NoMatch))
-                    {
-                        skipped += 1;
-                        self.stats.skipped.fetch_add(1, Relaxed);
-                        debug!("skip {}", &qid[..8.min(qid.len())]);
-                        to_requery.remove(qid);
-                    }
+                {
+                    skipped += 1;
+                    self.stats.skipped.fetch_add(1, Relaxed);
+                    debug!("skip {}", &qid[..8.min(qid.len())]);
+                    to_requery.remove(qid);
                 }
             });
         }
