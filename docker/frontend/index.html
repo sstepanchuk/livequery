@@ -242,6 +242,7 @@
             const q = editor.getValue().trim(), mode = $('mode').value;
             if (!q) return;
             
+            saveQuery(q);
             $('subBtn').disabled = true; $('subBtn').textContent = 'Subscribing...';
             const id = `w${Date.now()}-${++cnt}`;
             try {
@@ -316,9 +317,6 @@
         $('saveSettings').onclick = () => { LS.set('natsUrl', $('natsUrl').value); log('Settings saved', 'ok'); };
         $('clearSaved').onclick = () => { LS.set('queries', []); renderSaved(); };
         
-        // Save query on subscribe
-        const origSubBtn = $('subBtn').onclick;
-        $('subBtn').onclick = async () => { saveQuery(editor.getValue().trim()); await origSubBtn(); };
         
         const switchTab = tab => {
             document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
