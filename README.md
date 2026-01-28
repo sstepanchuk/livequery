@@ -2,11 +2,61 @@
 
 Real-time SQL query subscriptions for PostgreSQL via NATS.
 
+[![CI](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml/badge.svg)](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml)
+[![Release](https://github.com/sstepanchuk/livequery/actions/workflows/release.yml/badge.svg)](https://github.com/sstepanchuk/livequery/releases)
+
 ## What is it?
 
 LiveQuery lets you subscribe to SQL query results. When data changes in PostgreSQL, clients automatically receive updates.
 
-## Quick Start with Docker
+## Installation
+
+### From Releases (Recommended)
+
+Download pre-built binaries from [GitHub Releases](https://github.com/sstepanchuk/livequery/releases):
+
+| Platform | Architecture | File |
+|----------|--------------|------|
+| Linux | x86_64 | `livequery-linux-x86_64.tar.gz` |
+| Linux | aarch64 | `livequery-linux-aarch64.tar.gz` |
+| macOS | x86_64 | `livequery-macos-x86_64.tar.gz` |
+| macOS | Apple Silicon | `livequery-macos-aarch64.tar.gz` |
+| Windows | x86_64 | `livequery-windows-x86_64.zip` |
+
+```bash
+# Example: Linux x86_64
+curl -LO https://github.com/sstepanchuk/livequery/releases/latest/download/livequery-linux-x86_64.tar.gz
+tar -xzf livequery-linux-x86_64.tar.gz
+./livequery-server
+```
+
+### Docker Image
+
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/sstepanchuk/livequery:latest
+
+# Run
+docker run -d \
+  -e DATABASE_URL=postgres://user:pass@host/db \
+  -e NATS_URL=nats://nats:4222 \
+  ghcr.io/sstepanchuk/livequery:latest
+```
+
+Available tags:
+- `ghcr.io/sstepanchuk/livequery:latest` - Latest stable release
+- `ghcr.io/sstepanchuk/livequery:0.1.2` - Specific version
+
+### Build from Source
+
+```bash
+git clone https://github.com/sstepanchuk/livequery.git
+cd livequery
+cargo build --release
+./target/release/livequery-server
+```
+
+## Quick Start with Docker Compose
 
 ```bash
 cd docker
