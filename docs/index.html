@@ -42,6 +42,7 @@
         .code-tab { padding: 12px 20px; font-size: 13px; color: var(--muted); cursor: pointer; border: none; background: none; transition: all .2s; border-bottom: 2px solid transparent; }
         .code-tab:hover { color: var(--text); }
         .code-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(16,185,129,.05); }
+        .code-tab span { color: var(--muted); font-weight: 400; font-size: 11px; }
         .code-content { display: none; }
         .code-content.active { display: block; }
         .code-block pre { margin: 0; padding: 24px; font-size: 13px; line-height: 1.7; overflow-x: auto; }
@@ -102,10 +103,10 @@
             <h2>Quick Start</h2>
             <div class="code-block">
                 <div class="code-tabs">
-                    <button class="code-tab active" data-lang="js">JavaScript</button>
-                    <button class="code-tab" data-lang="python">Python</button>
-                    <button class="code-tab" data-lang="go">Go</button>
-                    <button class="code-tab" data-lang="rust">Rust</button>
+                    <button class="code-tab active" data-lang="js">JavaScript <span>(nats.ws)</span></button>
+                    <button class="code-tab" data-lang="python">Python <span>(nats-py)</span></button>
+                    <button class="code-tab" data-lang="go">Go <span>(nats.go)</span></button>
+                    <button class="code-tab" data-lang="rust">Rust <span>(async-nats)</span></button>
                 </div>
                 <div class="code-content active" data-lang="js">
                     <pre><code class="language-javascript">// Subscribe to a query
