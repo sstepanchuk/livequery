@@ -110,13 +110,6 @@ jobs:
           (Get-FileHash ${{ matrix.name }}.zip -Algorithm SHA256).Hash.ToLower() + "  " + "${{ matrix.name }}.zip" | Out-File -Encoding ASCII ${{ matrix.name }}.zip.sha256
       
       # Upload
-      - name: Upload artifact for demo
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: livequery-linux-x86_64
-          path: ${{ matrix.name }}.tar.gz
-      
       - name: Upload Release Asset (Unix)
         if: runner.os != 'Windows'
         uses: softprops/action-gh-release@v1
@@ -163,43 +156,3 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  # Demo image (all-in-one test environment)
-  docker-demo:
-    name: Docker Demo Image
-    needs: [create-release, build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Download Linux binary
-        uses: actions/download-artifact@v4
-        with:
-          pattern: livequery-linux-x86_64*
-          merge-multiple: true
-      
-      - name: Extract binary
-        run: |
-          tar -xzf livequery-linux-x86_64.tar.gz
-          chmod +x livequery-server
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push demo
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.demo
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ghcr.io/${{ github.repository }}-demo:${{ needs.create-release.outputs.version }}
-            ghcr.io/${{ github.repository }}-demo:latest
