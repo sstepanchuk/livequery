@@ -124,6 +124,24 @@ const latency = Date.now() - batch.ts; // ms from server to client
 | `livequery.{subscription_id}.unsubscribe` | Unsubscribe |
 | `livequery.{subscription_id}.heartbeat` | Keep-alive |
 | `livequery.{subscription_id}.events` | Receive updates (subscribe to this after registering) |
+| `livequery.health` | Health check - returns server stats |
+
+### Health Check
+
+```bash
+# Using NATS CLI
+nats req livequery.health ""
+
+# Response:
+{
+  "status": "healthy",
+  "server_id": "lq-abc123",
+  "subscriptions": 5,
+  "queries": 2,
+  "msgs_in": 150,
+  "msgs_out": 300
+}
+```
 
 ## Project Structure
 
@@ -166,6 +184,21 @@ docker/
 ┌─────────────────────────▼───────────────────────────────────┐
 │  PostgreSQL (wal_level=logical)                             │
 └─────────────────────────────────────────────────────────────┘
+```
+
+## Programmatic Configuration
+
+For testing or embedding, use the builder pattern:
+
+```rust
+use livequery_server::core::Config;
+
+let cfg = Config::builder()
+    .db_url("postgres://user:pass@localhost/mydb")
+    .nats_url("nats://localhost:4222")
+    .max_subscriptions(5000)
+    .client_timeout_secs(60)
+    .build()?;
 ```
 
 ## License

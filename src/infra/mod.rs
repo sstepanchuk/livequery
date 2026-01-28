@@ -6,3 +6,4 @@ pub mod wal_stream;
 pub use db::{DbPool, intern_col_name};
 pub use nats::NatsHandler;
 pub use wal_stream::WalStreamer;
+pub use pgoutput::{PgOutputDecoder, WalChange, ColMeta};

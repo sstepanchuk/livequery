@@ -110,6 +110,7 @@
             <span class="logo">⚡ LQ</span>
             <span id="statusBadge" class="status disconnected">Off</span>
             <button class="btn btn-primary" id="connectBtn" style="font-size:9px;padding:2px 6px;">Connect</button>
+            <button class="btn btn-ghost" id="healthBtn" style="font-size:9px;padding:2px 6px;" title="Health Check">💓</button>
             <div class="stats-bar">
                 <div class="stat-item"><span class="v accent" id="statSubs">0</span><span style="color:var(--muted)">sub</span></div>
                 <div class="stat-item"><span class="v success" id="statRows">0</span><span style="color:var(--muted)">row</span></div>
@@ -586,6 +587,21 @@
                 }
             };
         });
+        
+        // Health check
+        document.getElementById('healthBtn').onclick = async () => {
+            if (!nc) { log('Not connected', 'error'); return; }
+            try {
+                const msg = await nc.request('livequery.health', sc.encode(''), { timeout: 5000 });
+                const health = JSON.parse(sc.decode(msg.data));
+                log(`Health: ${health.status} | subs=${health.subscriptions} queries=${health.queries} in=${health.msgs_in} out=${health.msgs_out}`, 'event');
+                
+                // Update UI with server stats
+                document.getElementById('statSubs').textContent = health.subscriptions;
+            } catch (e) {
+                log(`Health check failed: ${e.message}`, 'error');
+            }
+        };
         
         // Auto-connect on load
         setTimeout(() => document.getElementById('connectBtn').click(), 500);

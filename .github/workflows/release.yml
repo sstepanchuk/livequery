@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: LiveQuery v${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: livequery-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: livequery-linux-aarch64
+            cross: true
+          
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: livequery-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: livequery-macos-aarch64
+          
+          # Windows
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: livequery-windows-x86_64
+            ext: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      
+      # For cross-compilation on Linux
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      
+      # Build
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+      
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+      
+      # Package
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czvf ../../../${{ matrix.name }}.tar.gz livequery-server
+          cd ../../..
+          sha256sum ${{ matrix.name }}.tar.gz > ${{ matrix.name }}.tar.gz.sha256
+      
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path livequery-server.exe -DestinationPath ../../../${{ matrix.name }}.zip
+          cd ../../..
+          (Get-FileHash ${{ matrix.name }}.zip -Algorithm SHA256).Hash.ToLower() + "  " + "${{ matrix.name }}.zip" | Out-File -Encoding ASCII ${{ matrix.name }}.zip.sha256
+      
+      # Upload
+      - name: Upload Release Asset (Unix)
+        if: runner.os != 'Windows'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.tar.gz.sha256
+      
+      - name: Upload Release Asset (Windows)
+        if: runner.os == 'Windows'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ matrix.name }}.zip
+            ${{ matrix.name }}.zip.sha256
+
+  # Docker image
+  docker:
+    name: Docker Image
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ needs.create-release.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

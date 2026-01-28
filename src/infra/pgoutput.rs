@@ -28,6 +28,8 @@ pub enum WalChange {
 struct RelCache {
     table: Arc<str>,
     cols: Arc<[ColMeta]>,
+    /// Pre-computed column names for RowData creation (avoids re-cloning per row)
+    col_names: Arc<[Arc<str>]>,
 }
 
 /// pgoutput decoder with relation cache
@@ -91,9 +93,11 @@ impl PgOutputDecoder {
             });
         }
         
+        let col_names: Arc<[Arc<str>]> = Arc::from(cols.iter().map(|c| c.name.clone()).collect::<Vec<_>>());
         self.rels.insert(rel_id, RelCache {
             table: table_arc,
             cols: Arc::from(cols),
+            col_names,
         });
         Some(WalChange::Other)
     }
@@ -104,7 +108,7 @@ impl PgOutputDecoder {
         if data.get(p)? != &b'N' { return None; }
         p += 1;
         let cache = self.rels.get(&rel)?;
-        let row = parse_tuple(data, &mut p, &cache.cols)?;
+        let row = parse_tuple(data, &mut p, &cache.cols, &cache.col_names)?;
         Some(WalChange::Insert { rel, row })
     }
 
@@ -121,7 +125,7 @@ impl PgOutputDecoder {
         
         if data.get(p)? != &b'N' { return None; }
         p += 1;
-        let row = parse_tuple(data, &mut p, &cache.cols)?;
+        let row = parse_tuple(data, &mut p, &cache.cols, &cache.col_names)?;
         Some(WalChange::Update { rel, row })
     }
 
@@ -176,16 +180,14 @@ fn skip_cstr(data: &[u8], p: &mut usize) -> Option<()> {
     Some(())
 }
 
-/// Parse tuple into RowData
+/// Parse tuple into RowData - uses pre-computed col_names for zero-copy
 #[inline]
-fn parse_tuple(data: &[u8], p: &mut usize, cols: &[ColMeta]) -> Option<RowData> {
+fn parse_tuple(data: &[u8], p: &mut usize, cols: &[ColMeta], col_names: &Arc<[Arc<str>]>) -> Option<RowData> {
     let n = read_u16(data, p)? as usize;
-    let mut names: Vec<Arc<str>> = Vec::with_capacity(n);
     let mut vals: Vec<RowValue> = Vec::with_capacity(n);
     
     for i in 0..n {
         let col = cols.get(i)?;
-        names.push(col.name.clone());
         
         match *data.get(*p)? {
             b'n' | b'u' => { *p += 1; vals.push(RowValue::Null); }
@@ -205,7 +207,8 @@ fn parse_tuple(data: &[u8], p: &mut usize, cols: &[ColMeta]) -> Option<RowData> 
             _ => return None,
         }
     }
-    Some(RowData::new(Arc::from(names.into_boxed_slice()), vals))
+    // Use pre-computed col_names - just clone the Arc (cheap)
+    Some(RowData::new(col_names.clone(), vals))
 }
 
 /// Skip tuple without parsing (for old row in update)

@@ -61,6 +61,12 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x livequery-server || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   sql-api:
     image: node:20-alpine

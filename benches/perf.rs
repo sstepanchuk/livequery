@@ -6,10 +6,11 @@ use serde_json::{json, Value};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use livequery_server::core::event::SubscribeEvent;
-use livequery_server::core::query::analyze;
+use livequery_server::core::event::{SubscribeEvent, EventBatch};
+use livequery_server::core::query::{analyze, EvalResult};
 use livequery_server::core::row::{RowData, RowValue};
 use livequery_server::core::subscription::Snapshot;
+use livequery_server::infra::PgOutputDecoder;
 
 // === HEX encoding ===
 
@@ -451,6 +452,325 @@ fn bench_snapshot_diff_typed(c: &mut Criterion) {
     group.finish();
 }
 
+// === WAL pgoutput decoding benchmarks ===
+
+fn build_relation_msg(rel_id: u32, table: &str, cols: &[(&str, u32)]) -> Vec<u8> {
+    let mut data = vec![b'R'];
+    data.extend_from_slice(&rel_id.to_be_bytes());
+    // schema (empty string)
+    data.push(0);
+    // table name
+    data.extend_from_slice(table.as_bytes());
+    data.push(0);
+    // replica identity
+    data.push(b'd');
+    // number of columns
+    data.extend_from_slice(&(cols.len() as u16).to_be_bytes());
+    for (name, oid) in cols {
+        data.push(0); // flags
+        data.extend_from_slice(name.as_bytes());
+        data.push(0);
+        data.extend_from_slice(&oid.to_be_bytes());
+        data.extend_from_slice(&0u32.to_be_bytes()); // type modifier
+    }
+    data
+}
+
+fn build_insert_msg(rel_id: u32, values: &[&str]) -> Vec<u8> {
+    let mut data = vec![b'I'];
+    data.extend_from_slice(&rel_id.to_be_bytes());
+    data.push(b'N');
+    data.extend_from_slice(&(values.len() as u16).to_be_bytes());
+    for val in values {
+        data.push(b't'); // text format
+        data.extend_from_slice(&(val.len() as u32).to_be_bytes());
+        data.extend_from_slice(val.as_bytes());
+    }
+    data
+}
+
+fn bench_pgoutput_decode(c: &mut Criterion) {
+    let mut group = c.benchmark_group("pgoutput_decode");
+    
+    // Setup: create decoder with relation cached
+    let cols = vec![
+        ("id", 23u32), ("name", 25), ("email", 25), ("age", 23), ("active", 16),
+        ("created_at", 1114), ("updated_at", 1114), ("data", 3802),
+    ];
+    let rel_msg = build_relation_msg(16384, "users", &cols);
+    let insert_msg = build_insert_msg(16384, &["1", "John Doe", "john@example.com", "30", "t", "2024-01-01", "2024-01-01", "{}"]);
+    
+    group.bench_function("decode_insert_8cols", |b| {
+        b.iter_batched(
+            || {
+                let mut decoder = PgOutputDecoder::new();
+                decoder.decode(&rel_msg);
+                (decoder, insert_msg.clone())
+            },
+            |(mut decoder, msg)| decoder.decode(black_box(&msg)),
+            BatchSize::SmallInput,
+        )
+    });
+
+    // Benchmark multiple inserts (amortize relation setup)
+    group.bench_function("decode_100_inserts", |b| {
+        b.iter_batched(
+            || {
+                let mut decoder = PgOutputDecoder::new();
+                decoder.decode(&rel_msg);
+                let msgs: Vec<_> = (0..100).map(|i| {
+                    build_insert_msg(16384, &[
+                        &i.to_string(), &format!("User {}", i), &format!("user{}@example.com", i),
+                        &(20 + i % 50).to_string(), if i % 2 == 0 { "t" } else { "f" },
+                        "2024-01-01", "2024-01-01", "{}"
+                    ])
+                }).collect();
+                (decoder, msgs)
+            },
+            |(mut decoder, msgs)| {
+                for msg in &msgs {
+                    black_box(decoder.decode(msg));
+                }
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    group.finish();
+}
+
+// === Query cache behavior benchmarks ===
+
+fn bench_query_cache_patterns(c: &mut Criterion) {
+    let mut group = c.benchmark_group("query_cache");
+    
+    // Simulate cache hit (same query repeated)
+    let q = "SELECT id, name FROM users WHERE status = 'active'";
+    analyze(q); // warm up
+    
+    group.bench_function("cache_hit_repeated", |b| {
+        b.iter(|| analyze(black_box(q)))
+    });
+    
+    // Simulate cache miss (unique queries)
+    group.bench_function("cache_miss_unique", |b| {
+        let mut idx = 0usize;
+        b.iter(|| {
+            let q = format!("SELECT id, name FROM table_{} WHERE x = {}", idx % 500, idx);
+            idx = idx.wrapping_add(1);
+            analyze(black_box(&q))
+        })
+    });
+    
+    // Mixed workload (80% hit, 20% miss)
+    group.bench_function("mixed_80_20", |b| {
+        let mut idx = 0usize;
+        let common_queries = [
+            "SELECT * FROM users WHERE active = true",
+            "SELECT id, name FROM orders WHERE status = 'pending'",
+            "SELECT count(*) FROM products",
+        ];
+        b.iter(|| {
+            let q = if idx % 5 == 0 {
+                format!("SELECT * FROM unique_{}", idx)
+            } else {
+                common_queries[idx % common_queries.len()].to_string()
+            };
+            idx = idx.wrapping_add(1);
+            analyze(black_box(&q))
+        })
+    });
+
+    group.finish();
+}
+
+// === JSON serialization benchmarks ===
+
+fn bench_json_serialization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("json_serialization");
+    
+    // Small event batch
+    let small_events: Vec<SubscribeEvent> = (0..5).map(|i| SubscribeEvent::insert(
+        i as i64, json!({"id": i, "name": format!("User {}", i)})
+    )).collect();
+    
+    // Large event batch
+    let large_events: Vec<SubscribeEvent> = (0..100).map(|i| SubscribeEvent::insert(
+        i as i64, json!({"id": i, "name": format!("User {}", i), "email": format!("user{}@test.com", i), "data": {"nested": true}})
+    )).collect();
+    
+    let small_batch = EventBatch { seq: 1, ts: 1234567890, events: small_events.clone() };
+    let large_batch = EventBatch { seq: 1, ts: 1234567890, events: large_events.clone() };
+    
+    group.bench_function("serialize_5_events", |b| {
+        b.iter(|| serde_json::to_vec(black_box(&small_batch)))
+    });
+    
+    group.bench_function("serialize_100_events", |b| {
+        b.iter(|| serde_json::to_vec(black_box(&large_batch)))
+    });
+    
+    // Snapshot mode serialization (rows array)
+    let rows: Vec<Value> = (0..100).map(|i| json!({"id": i, "name": format!("User {}", i)})).collect();
+    let snapshot_payload = json!({ "seq": 1, "ts": 1234567890u64, "rows": rows });
+    
+    group.bench_function("serialize_snapshot_100_rows", |b| {
+        b.iter(|| serde_json::to_vec(black_box(&snapshot_payload)))
+    });
+
+    group.finish();
+}
+
+// === RowData creation patterns ===
+
+fn bench_rowdata_creation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("rowdata_creation");
+    
+    // Simulate what happens in parse_tuple - precomputed cols vs building each time
+    let col_names: Arc<[Arc<str>]> = Arc::from(vec![
+        Arc::from("id"), Arc::from("name"), Arc::from("email"),
+        Arc::from("age"), Arc::from("active"), Arc::from("created_at"),
+    ]);
+    
+    // With precomputed cols (our optimization)
+    group.bench_function("precomputed_cols_arc_clone", |b| {
+        b.iter(|| {
+            let vals = vec![
+                RowValue::Int(1), RowValue::from_str("John"), RowValue::from_str("john@test.com"),
+                RowValue::Int(30), RowValue::Bool(true), RowValue::from_str("2024-01-01"),
+            ];
+            RowData::new(black_box(col_names.clone()), vals)
+        })
+    });
+    
+    // Without precomputed cols (old way - build Vec each time)
+    group.bench_function("build_cols_each_time", |b| {
+        b.iter(|| {
+            let cols: Vec<Arc<str>> = vec![
+                Arc::from("id"), Arc::from("name"), Arc::from("email"),
+                Arc::from("age"), Arc::from("active"), Arc::from("created_at"),
+            ];
+            let vals = vec![
+                RowValue::Int(1), RowValue::from_str("John"), RowValue::from_str("john@test.com"),
+                RowValue::Int(30), RowValue::Bool(true), RowValue::from_str("2024-01-01"),
+            ];
+            RowData::new(Arc::from(cols.into_boxed_slice()), vals)
+        })
+    });
+    
+    // Batch creation (100 rows) - precomputed
+    group.bench_function("100_rows_precomputed", |b| {
+        b.iter(|| {
+            let mut rows = Vec::with_capacity(100);
+            for i in 0..100 {
+                let vals = vec![
+                    RowValue::Int(i), RowValue::from_str("John"), RowValue::from_str("john@test.com"),
+                    RowValue::Int(30), RowValue::Bool(true), RowValue::from_str("2024-01-01"),
+                ];
+                rows.push(RowData::new(col_names.clone(), vals));
+            }
+            black_box(rows)
+        })
+    });
+    
+    // Batch creation (100 rows) - build each time
+    group.bench_function("100_rows_build_each", |b| {
+        b.iter(|| {
+            let mut rows = Vec::with_capacity(100);
+            for i in 0..100 {
+                let cols: Vec<Arc<str>> = vec![
+                    Arc::from("id"), Arc::from("name"), Arc::from("email"),
+                    Arc::from("age"), Arc::from("active"), Arc::from("created_at"),
+                ];
+                let vals = vec![
+                    RowValue::Int(i), RowValue::from_str("John"), RowValue::from_str("john@test.com"),
+                    RowValue::Int(30), RowValue::Bool(true), RowValue::from_str("2024-01-01"),
+                ];
+                rows.push(RowData::new(Arc::from(cols.into_boxed_slice()), vals));
+            }
+            black_box(rows)
+        })
+    });
+
+    group.finish();
+}
+
+// === Filter evaluation on RowData vs JSON ===
+
+fn bench_filter_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("filter_rowdata_vs_json");
+    
+    let analysis = analyze("SELECT * FROM users WHERE status = 'active' AND age > 18 AND name LIKE 'John%'");
+    
+    // RowData (typed)
+    let row_typed = RowData::from_value(&json!({"id": 1, "status": "active", "age": 25, "name": "John Doe", "email": "test@test.com"}));
+    
+    // JSON Value
+    let row_json = json!({"id": 1, "status": "active", "age": 25, "name": "John Doe", "email": "test@test.com"});
+    
+    group.bench_function("eval_rowdata_complex", |b| {
+        b.iter(|| analysis.filter.eval_row(black_box(&row_typed)))
+    });
+    
+    group.bench_function("eval_json_complex", |b| {
+        b.iter(|| analysis.filter.eval(black_box(&row_json)))
+    });
+    
+    // Batch evaluation (100 rows)
+    let rows_typed: Vec<_> = (0..100).map(|i| RowData::from_value(&json!({
+        "id": i, "status": if i % 3 == 0 { "active" } else { "inactive" },
+        "age": 18 + i % 50, "name": format!("User {}", i)
+    }))).collect();
+    
+    let rows_json: Vec<Value> = (0..100).map(|i| json!({
+        "id": i, "status": if i % 3 == 0 { "active" } else { "inactive" },
+        "age": 18 + i % 50, "name": format!("User {}", i)
+    })).collect();
+    
+    group.bench_function("eval_100_rowdata", |b| {
+        b.iter(|| {
+            rows_typed.iter().filter(|r| analysis.filter.eval_row(r) == EvalResult::Match).count()
+        })
+    });
+    
+    group.bench_function("eval_100_json", |b| {
+        b.iter(|| {
+            rows_json.iter().filter(|r| analysis.filter.eval(r) == EvalResult::Match).count()
+        })
+    });
+
+    group.finish();
+}
+
+// === Memory allocation patterns ===
+
+fn bench_memory_patterns(c: &mut Criterion) {
+    let mut group = c.benchmark_group("memory_patterns");
+    
+    // String interning effect
+    group.bench_function("string_intern_hit", |b| {
+        // Warm up intern cache
+        for _ in 0..100 { let _ = RowValue::from_str("common_column"); }
+        b.iter(|| RowValue::from_str(black_box("common_column")))
+    });
+    
+    group.bench_function("string_no_intern_long", |b| {
+        b.iter(|| RowValue::from_str(black_box("this_is_a_very_long_string_that_exceeds_intern_limit_and_wont_be_cached")))
+    });
+    
+    // Arc cloning (cheap) vs creating new
+    let arc_str: Arc<str> = Arc::from("test_string");
+    group.bench_function("arc_clone", |b| {
+        b.iter(|| black_box(arc_str.clone()))
+    });
+    
+    group.bench_function("arc_create_new", |b| {
+        b.iter(|| Arc::<str>::from(black_box("test_string")))
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_hex,
@@ -466,6 +786,13 @@ criterion_group!(
     bench_rowvalue,
     bench_snapshot_init,
     bench_snapshot_get_all,
-    bench_snapshot_diff_typed
+    bench_snapshot_diff_typed,
+    // New comprehensive benchmarks
+    bench_pgoutput_decode,
+    bench_query_cache_patterns,
+    bench_json_serialization,
+    bench_rowdata_creation,
+    bench_filter_comparison,
+    bench_memory_patterns
 );
 criterion_main!(benches);

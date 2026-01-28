@@ -42,7 +42,8 @@ impl NatsHandler {
         let mut sub_subscribe = self.nc.subscribe(format!("{}.*.subscribe", prefix)).await?;
         let mut sub_unsubscribe = self.nc.subscribe(format!("{}.*.unsubscribe", prefix)).await?;
         let mut sub_heartbeat = self.nc.subscribe(format!("{}.*.heartbeat", prefix)).await?;
-        info!("NATS listening on {}.*.{{subscribe|unsubscribe|heartbeat}}", prefix);
+        let mut sub_health = self.nc.subscribe(format!("{}.health", prefix)).await?;
+        info!("NATS listening on {}.*.{{subscribe|unsubscribe|heartbeat}} + {}.health", prefix, prefix);
         
         loop {
             tokio::select! {
@@ -71,6 +72,19 @@ impl NatsHandler {
                     } else {
                         self.reply(&m.reply, &serde_json::json!({"success": false, "error": "Missing subscription_id in subject"})).await;
                     }
+                }
+                Some(m) = sub_health.next() => {
+                    self.msgs_in.fetch_add(1, Relaxed);
+                    let (subs, queries) = self.subs.stats();
+                    let (msgs_in, msgs_out) = self.stats();
+                    self.reply(&m.reply, &serde_json::json!({
+                        "status": "healthy",
+                        "server_id": self.cfg.server_id,
+                        "subscriptions": subs,
+                        "queries": queries,
+                        "msgs_in": msgs_in,
+                        "msgs_out": msgs_out
+                    })).await;
                 }
             }
         }
@@ -158,5 +172,24 @@ impl NatsHandler {
         self.msgs_out.fetch_add(1, Relaxed);
         self.nc.publish(subject, bytes).await?;
         Ok(())
+    }
+    
+    /// Batch publish - accumulate messages and flush once (reduces syscalls)
+    #[inline]
+    pub async fn publish_batch(&self, messages: &[(&str, Bytes)]) -> Result<()> {
+        if messages.is_empty() { return Ok(()); }
+        for (sub_id, bytes) in messages {
+            let subject = self.cfg.sub_events_subject(sub_id);
+            self.nc.publish(subject, bytes.clone()).await?;
+        }
+        self.msgs_out.fetch_add(messages.len() as u64, Relaxed);
+        self.nc.flush().await?;
+        Ok(())
+    }
+    
+    /// Get stats: (messages_in, messages_out)
+    #[inline]
+    pub fn stats(&self) -> (u64, u64) {
+        (self.msgs_in.load(Relaxed), self.msgs_out.load(Relaxed))
     }
 }

@@ -45,6 +45,9 @@ parking_lot = "0.12"
 itoa = "1"
 memchr = "2"
 
+# URL parsing
+url = "2"
+
 # Utils
 anyhow = "1.0"
 tracing = "0.1"

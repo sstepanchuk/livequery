@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Duration;
 use tracing::{debug, error, info, trace};
+use url::Url;
 
 use crate::core::{Config, SubscriptionManager};
 use crate::core::query::{EvalResult, WhereFilter};
@@ -50,40 +51,41 @@ impl WalStreamer {
         info!("WAL streaming mode starting");
         let config = self.build_config()?;
         
+        let mut retry_delay = Duration::from_secs(1);
+        const MAX_DELAY: Duration = Duration::from_secs(60);
+        
         loop {
             match self.stream_loop(&config, &subs, &nats).await {
-                Ok(()) => info!("WAL stream ended, reconnecting..."),
+                Ok(()) => {
+                    info!("WAL stream ended, reconnecting...");
+                    retry_delay = Duration::from_secs(1); // Reset on success
+                }
                 Err(e) => {
-                    error!("WAL error: {e}, retry in 5s");
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    error!("WAL error: {e}, retry in {:?}", retry_delay);
+                    tokio::time::sleep(retry_delay).await;
+                    // Exponential backoff with cap
+                    retry_delay = (retry_delay * 2).min(MAX_DELAY);
                 }
             }
         }
     }
 
     fn build_config(&self) -> Result<ReplicationConfig> {
-        let url = &self.cfg.db_url;
-        let stripped = url.trim_start_matches("postgres://").trim_start_matches("postgresql://");
-        let parts: Vec<&str> = stripped.split('@').collect();
+        // Use url crate for robust parsing
+        let parsed = Url::parse(&self.cfg.db_url)
+            .map_err(|e| anyhow::anyhow!("Invalid database URL: {}", e))?;
         
-        let (user, password) = if parts.len() >= 2 {
-            let auth: Vec<&str> = parts[0].split(':').collect();
-            (auth.first().unwrap_or(&"postgres").to_string(),
-             auth.get(1).map(|s| s.to_string()).unwrap_or_default())
-        } else {
-            ("postgres".into(), String::new())
-        };
-        
-        let host_part = parts.last().unwrap_or(&"localhost:5432/postgres");
-        let (host_port, db) = host_part.split_once('/').unwrap_or((host_part, "postgres"));
-        let (host, port_str) = host_port.split_once(':').unwrap_or((host_port, "5432"));
+        let user = if parsed.username().is_empty() { "postgres".to_string() } else { parsed.username().to_string() };
+        let password = parsed.password().unwrap_or("").to_string();
+        let host = parsed.host_str().unwrap_or("localhost").to_string();
+        let port = parsed.port().unwrap_or(5432);
         
         Ok(ReplicationConfig {
             host: host.into(),
-            port: port_str.parse().unwrap_or(5432),
+            port,
             user,
             password,
-            database: db.into(),
+            database: parsed.path().trim_start_matches('/').to_string(),
             tls: TlsConfig::disabled(),
             slot: self.cfg.wal_slot.clone(),
             publication: self.cfg.wal_publication.clone(),
@@ -229,18 +231,29 @@ impl WalStreamer {
         
         if ev_subs.is_empty() && snap_subs.is_empty() { return; }
         
-        let snap_rows = (!snap_subs.is_empty()).then(|| q.snap.read().get_all_rows());
+        // Lazy: only read snapshot if we have snapshot subscribers
+        let snap_rows = if !snap_subs.is_empty() { Some(q.snap.read().get_all_rows()) } else { None };
         let Some(batch) = q.make_batch(events) else { return };
         drop(q);
         
+        // Batch publish: collect all messages and flush once (reduces syscalls)
+        let mut messages: Vec<(&str, Bytes)> = Vec::with_capacity(ev_subs.len() + snap_subs.len());
+        
         if !ev_subs.is_empty() {
             let bytes = Bytes::from(serde_json::to_vec(&batch).unwrap_or_default());
-            for sid in ev_subs { let _ = nats.publish_bytes(&sid, bytes.clone()).await; }
+            for sid in &ev_subs { 
+                messages.push((sid.as_ref(), bytes.clone())); 
+            }
         }
         
         if let Some(rows) = snap_rows {
             let bytes = Bytes::from(serde_json::to_vec(&serde_json::json!({ "seq": batch.seq, "ts": batch.ts, "rows": rows })).unwrap_or_default());
-            for sid in snap_subs { let _ = nats.publish_bytes(&sid, bytes.clone()).await; }
+            for sid in &snap_subs { 
+                messages.push((sid.as_ref(), bytes.clone())); 
+            }
         }
+        
+        // Single flush for all messages
+        let _ = nats.publish_batch(&messages).await;
     }
 }

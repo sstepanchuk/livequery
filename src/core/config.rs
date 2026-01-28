@@ -120,3 +120,64 @@ fn gen_id() -> String {
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     format!("lq-{:x}", ts & 0xFFFFFF)
 }
+
+/// Builder pattern for Config (useful for testing)
+#[derive(Default)]
+pub struct ConfigBuilder {
+    server_id: Option<String>,
+    log_level: Option<String>,
+    shutdown_timeout_secs: Option<u64>,
+    db_url: Option<String>,
+    db_pool_size: Option<u32>,
+    db_timeout_secs: Option<u64>,
+    nats_url: Option<String>,
+    nats_prefix: Option<String>,
+    client_timeout_secs: Option<u64>,
+    cleanup_interval_secs: Option<u64>,
+    max_subscriptions: Option<usize>,
+    wal_slot: Option<String>,
+    wal_publication: Option<String>,
+}
+
+impl ConfigBuilder {
+    pub fn new() -> Self { Self::default() }
+    
+    pub fn server_id(mut self, v: impl Into<String>) -> Self { self.server_id = Some(v.into()); self }
+    pub fn log_level(mut self, v: impl Into<String>) -> Self { self.log_level = Some(v.into()); self }
+    pub fn shutdown_timeout_secs(mut self, v: u64) -> Self { self.shutdown_timeout_secs = Some(v); self }
+    pub fn db_url(mut self, v: impl Into<String>) -> Self { self.db_url = Some(v.into()); self }
+    pub fn db_pool_size(mut self, v: u32) -> Self { self.db_pool_size = Some(v); self }
+    pub fn db_timeout_secs(mut self, v: u64) -> Self { self.db_timeout_secs = Some(v); self }
+    pub fn nats_url(mut self, v: impl Into<String>) -> Self { self.nats_url = Some(v.into()); self }
+    pub fn nats_prefix(mut self, v: impl Into<String>) -> Self { self.nats_prefix = Some(v.into()); self }
+    pub fn client_timeout_secs(mut self, v: u64) -> Self { self.client_timeout_secs = Some(v); self }
+    pub fn cleanup_interval_secs(mut self, v: u64) -> Self { self.cleanup_interval_secs = Some(v); self }
+    pub fn max_subscriptions(mut self, v: usize) -> Self { self.max_subscriptions = Some(v); self }
+    pub fn wal_slot(mut self, v: impl Into<String>) -> Self { self.wal_slot = Some(v.into()); self }
+    pub fn wal_publication(mut self, v: impl Into<String>) -> Self { self.wal_publication = Some(v.into()); self }
+    
+    pub fn build(self) -> Result<Config> {
+        let cfg = Config {
+            server_id: self.server_id.unwrap_or_else(gen_id),
+            log_level: self.log_level.unwrap_or_else(|| "info".into()),
+            shutdown_timeout_secs: self.shutdown_timeout_secs.unwrap_or(30),
+            db_url: self.db_url.ok_or_else(|| anyhow::anyhow!("db_url is required"))?,
+            db_pool_size: self.db_pool_size.unwrap_or(16),
+            db_timeout_secs: self.db_timeout_secs.unwrap_or(30),
+            nats_url: self.nats_url.unwrap_or_else(|| "nats://localhost:4222".into()),
+            nats_prefix: self.nats_prefix.unwrap_or_else(|| "livequery".into()),
+            client_timeout_secs: self.client_timeout_secs.unwrap_or(30),
+            cleanup_interval_secs: self.cleanup_interval_secs.unwrap_or(10),
+            max_subscriptions: self.max_subscriptions.unwrap_or(10000),
+            wal_slot: self.wal_slot.unwrap_or_else(|| "livequery_slot".into()),
+            wal_publication: self.wal_publication.unwrap_or_else(|| "livequery_pub".into()),
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
+}
+
+impl Config {
+    /// Create a builder for Config
+    pub fn builder() -> ConfigBuilder { ConfigBuilder::new() }
+}

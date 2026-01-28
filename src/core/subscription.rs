@@ -164,7 +164,10 @@ impl SubscriptionManager {
                 });
                 self.subs_count.fetch_add(1, Relaxed);
                 
-                let seq = self.queries.get(&query_id).map(|q| q.seq.load(Relaxed)).unwrap_or(0);
+                // Avoid double lookup: seq is 0 for new queries, fetch from existing
+                let seq = if is_new_query { 0 } else {
+                    self.queries.get(&query_id).map(|q| q.seq.load(Relaxed)).unwrap_or(0)
+                };
                 
                 Ok(SubscribeResult { subscription_id: sub_id, query_id, is_new_query, seq })
             }

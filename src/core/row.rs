@@ -41,6 +41,27 @@ impl RowData {
         Self { cols, values, col_idx }
     }
 
+    /// Create RowData from JSON Value (for benchmarks and testing)
+    pub fn from_value(v: &Value) -> Self {
+        let obj = v.as_object();
+        let (cols, values): (Vec<Arc<str>>, Vec<RowValue>) = match obj {
+            Some(m) => m.iter().map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v))).unzip(),
+            None => (vec![], vec![]),
+        };
+        Self::new(Arc::from(cols.into_boxed_slice()), values)
+    }
+
+    /// Create indexed RowData from JSON Value
+    #[allow(dead_code)]
+    pub fn from_value_indexed(v: &Value) -> Self {
+        let obj = v.as_object();
+        let (cols, values): (Vec<Arc<str>>, Vec<RowValue>) = match obj {
+            Some(m) => m.iter().map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v))).unzip(),
+            None => (vec![], vec![]),
+        };
+        Self::new_indexed(Arc::from(cols.into_boxed_slice()), values)
+    }
+
     /// O(1) lookup with cached index, O(n) fallback for small rows
     #[inline]
     pub fn get(&self, name: &str) -> Option<&RowValue> {
@@ -79,6 +100,22 @@ impl RowData {
 }
 
 impl RowValue {
+    /// Create RowValue from JSON Value
+    pub fn from_value(v: &Value) -> RowValue {
+        match v {
+            Value::Null => RowValue::Null,
+            Value::Bool(b) => RowValue::Bool(*b),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() { RowValue::Int(i) }
+                else if let Some(f) = n.as_f64() { RowValue::Float(f) }
+                else { RowValue::from_str(&n.to_string()) }
+            }
+            Value::String(s) => RowValue::from_str(s),
+            Value::Array(a) => RowValue::Array(a.iter().map(RowValue::from_value).collect()),
+            Value::Object(_) => RowValue::Json(v.clone()),
+        }
+    }
+
     #[inline(always)]
     pub fn from_str(s: &str) -> RowValue {
         if s.len() <= INTERN_MAX_LEN {

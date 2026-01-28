@@ -88,7 +88,12 @@ pub fn analyze(q: &str) -> QueryAnalysis {
     
     // Slow path: parse and cache
     let result = analyze_inner(q);
-    if result.is_valid && CACHE.len() < 1000 { 
+    if result.is_valid { 
+        // Evict random entries if cache is full (simple LRU alternative)
+        if CACHE.len() >= 1000 {
+            let to_remove: Vec<u64> = CACHE.iter().take(100).map(|e| *e.key()).collect();
+            for k in to_remove { CACHE.remove(&k); }
+        }
         CACHE.insert(h, Arc::new(result.clone())); 
     }
     result
