@@ -95,9 +95,7 @@ cargo run --release
 ### 3. Subscribe
 
 ```javascript
-const subscriptionId = "client-1-orders";
-const response = await nats.request(`livequery.${subscriptionId}.subscribe`, {
-  subscription_id: subscriptionId,
+const response = await nats.request('livequery.orders.subscribe', {
   query: "SELECT * FROM orders WHERE user_id = 123",
   mode: "events"  // or "snapshot"
 });

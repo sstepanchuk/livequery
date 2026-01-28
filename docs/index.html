@@ -106,7 +106,6 @@
                 </div>
                 <pre class="code"><span class="c">// Subscribe to a query</span>
 <span class="k">const</span> res = <span class="k">await</span> nats.<span class="f">request</span>(<span class="s">'livequery.orders.subscribe'</span>, {
-  subscription_id: <span class="s">'orders'</span>,
   query: <span class="s">"SELECT * FROM orders WHERE status = 'pending'"</span>,
   mode: <span class="s">'events'</span>
 });

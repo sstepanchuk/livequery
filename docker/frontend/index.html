@@ -218,7 +218,7 @@
         window.sel = id => { active = id; render(); };
         window.unsub = async id => {
             if (!nc) return;
-            try { await nc.request(`livequery.${id}.unsubscribe`, sc.encode(JSON.stringify({subscription_id:id})), {timeout:5000}); log('Unsubscribed', 'ok'); } catch {}
+            try { await nc.request(`livequery.${id}.unsubscribe`, sc.encode('{}'), {timeout:5000}); log('Unsubscribed', 'ok'); } catch {}
             subs.get(id)?.sub?.unsubscribe();
             subs.delete(id);
             if (active === id) active = subs.keys().next().value || null;
@@ -244,7 +244,7 @@
             $('subBtn').disabled = true; $('subBtn').textContent = 'Subscribing...';
             const id = `w${Date.now()}-${++cnt}`;
             try {
-                const res = JSON.parse(sc.decode((await nc.request(`livequery.${id}.subscribe`, sc.encode(JSON.stringify({subscription_id:id, query:q, mode})), {timeout:10000})).data));
+                const res = JSON.parse(sc.decode((await nc.request(`livequery.${id}.subscribe`, sc.encode(JSON.stringify({query:q, mode})), {timeout:10000})).data));
                 if (!res.success) { log('Error: ' + res.error, 'err'); $('subBtn').disabled = false; $('subBtn').textContent = 'Subscribe'; return; }
                 
                 const s = { q, mode, rows: new Map(), sub: null };
