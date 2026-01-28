@@ -93,7 +93,6 @@ pub fn ts_millis() -> u64 {
 
 #[derive(Debug, Deserialize)]
 pub struct SubscribeRequest {
-    pub subscription_id: String,
     pub query: String,
     #[serde(default)]
     pub identity_columns: Option<Vec<String>>,

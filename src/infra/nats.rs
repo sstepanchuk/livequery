@@ -113,13 +113,14 @@ impl NatsHandler {
         db: &DbPool,
         subject_sub_id: Option<&str>,
     ) -> SubscribeResponse {
+        let sub_id = match subject_sub_id {
+            Some(id) => id.to_string(),
+            None => return SubscribeResponse::err("Missing subscription_id in topic"),
+        };
         let req: SubscribeRequest = match serde_json::from_slice(payload) {
             Ok(r) => r,
             Err(_) => return SubscribeResponse::err("Invalid request JSON"),
         };
-        let sub_id = subject_sub_id
-            .map(String::from)
-            .unwrap_or(req.subscription_id);
         let (query, identity_columns, mode) = (req.query, req.identity_columns, req.mode);
 
         info!("Sub [{}] {:.60}", sub_id, query);
