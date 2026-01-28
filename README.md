@@ -3,7 +3,9 @@
 Real-time SQL query subscriptions for PostgreSQL via NATS.
 
 [![CI](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml/badge.svg)](https://github.com/sstepanchuk/livequery/actions/workflows/ci.yml)
-[![Release](https://github.com/sstepanchuk/livequery/actions/workflows/release.yml/badge.svg)](https://github.com/sstepanchuk/livequery/releases)
+[![Release](https://img.shields.io/github/v/release/sstepanchuk/livequery?color=10b981&label=release)](https://github.com/sstepanchuk/livequery/releases)
+![Rust](https://img.shields.io/badge/rust-stable-10b981)
+![License](https://img.shields.io/badge/license-MIT-10b981)
 
 > ⚠️ **Alpha Version** — This project is under active development and testing. API may change. Not recommended for production use yet.
 
