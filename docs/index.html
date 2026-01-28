@@ -48,6 +48,15 @@
         .code-block pre { margin: 0; padding: 24px; font-size: 13px; line-height: 1.7; overflow-x: auto; }
         .code-block code { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
         
+        .modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .mode { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+        .mode-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .mode-name { font-family: 'SF Mono', monospace; font-size: 18px; font-weight: 600; color: var(--accent); }
+        .mode-tag { font-size: 11px; padding: 3px 8px; background: rgba(16,185,129,.15); color: var(--accent); border-radius: 4px; }
+        .mode p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+        .mode p code { background: rgba(255,255,255,.1); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .mode pre { background: #1d1f21; border-radius: 8px; padding: 16px; font-size: 12px; overflow-x: auto; }
+        
         .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         .feature { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
                 .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
@@ -172,6 +181,32 @@ while let Some(msg) = sub.next().await {
         </section>
         
         <section>
+            <h2>Subscription Modes</h2>
+            <div class="modes">
+                <div class="mode">
+                    <div class="mode-header">
+                        <span class="mode-name">events</span>
+                        <span class="mode-tag">Recommended</span>
+                    </div>
+                    <p>Receive only the changes: <code>insert</code>, <code>update</code>, <code>delete</code> events with row data. Ideal for real-time dashboards and live feeds where you maintain state client-side.</p>
+                    <pre><code class="language-javascript">{ "type": "insert", "row": { "id": 1, "status": "pending" } }
+{ "type": "update", "row": { "id": 1, "status": "shipped" } }
+{ "type": "delete", "row": { "id": 1 } }</code></pre>
+                </div>
+                <div class="mode">
+                    <div class="mode-header">
+                        <span class="mode-name">snapshot</span>
+                    </div>
+                    <p>Receive the full query result on every change. Simple to implement — just replace your data. Best for small datasets or when you need guaranteed consistency.</p>
+                    <pre><code class="language-javascript">{ "type": "snapshot", "rows": [
+  { "id": 1, "status": "pending" },
+  { "id": 2, "status": "shipped" }
+] }</code></pre>
+                </div>
+            </div>
+        </section>
+        
+        <section>
             <h2>Features</h2>
             <div class="features">
                 <div class="feature">
@@ -187,8 +222,8 @@ while let Some(msg) = sub.next().await {
                     <p>Identical queries share one snapshot. Scales efficiently with many clients.</p>
                 </div>
                 <div class="feature">
-                    <h3>Two Modes</h3>
-                    <p>Events mode for differential updates, Snapshot mode for full data sync.</p>
+                    <h3>NATS Native</h3>
+                    <p>Built on NATS for lightweight, high-performance pub/sub messaging.</p>
                 </div>
             </div>
         </section>
