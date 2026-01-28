@@ -57,35 +57,23 @@ jobs:
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      
       - name: Run benchmarks
-        run: cargo bench --bench perf -- --noplot 2>&1 | tee bench-output.txt
-      
-      - name: Compare benchmarks
-        uses: benchmark-action/github-action-benchmark@v1
+        run: cargo bench --bench perf -- --noplot
+
+  bench-compare:
+    name: Benchmark PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: boa-dev/criterion-compare-action@v3
         with:
-          name: Rust Benchmarks
-          tool: 'criterionrs'
-          output-file-path: bench-output.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          save-data-file: false
-          alert-threshold: '110%'
-          comment-on-alert: true
-          fail-on-alert: false
-          alert-comment-cc-users: '@sstepanchuk'
-          external-data-json-path: ./benchmark-data.json
-      
-      - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: bench-output.txt
-          retention-days: 90
+          branchName: ${{ github.base_ref }}
+          benchName: perf
+          token: ${{ secrets.GITHUB_TOKEN }}
