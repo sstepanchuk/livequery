@@ -52,7 +52,7 @@ docker run -d \
 
 Available tags:
 - `ghcr.io/sstepanchuk/livequery:latest` - Latest stable release
-- `ghcr.io/sstepanchuk/livequery:0.1.2` - Specific version
+- `ghcr.io/sstepanchuk/livequery:0.2.0` - Specific version
 
 ### Build from Source
 
@@ -118,11 +118,14 @@ nats.subscribe(response.subject, (msg) => {
 | **snapshot** | Full data on every change | Simple client (just displays data) |
 
 ### Events Mode (default)
+
+Differential updates inspired by [Materialize SUBSCRIBE](https://materialize.com/docs/sql/subscribe/). `mz_diff: +1` = insert, `-1` = delete. Update = delete + insert pair.
+
 ```json
 // Initial response
-{ "snapshot": [{"mz_diff": 1, "data": {"id": 1, "name": "Order 1"}}] }
+{ "events": [{"mz_diff": 1, "data": {"id": 1, "name": "Order 1"}}] }
 
-// On change (ts = server timestamp in ms for latency calculation)
+// On change (ts = server timestamp in ms)
 { "seq": 5, "ts": 1706400000000, "events": [
   {"mz_diff": -1, "data": {"id": 1, "name": "Order 1"}},
   {"mz_diff": 1,  "data": {"id": 1, "name": "Updated"}}
@@ -130,12 +133,15 @@ nats.subscribe(response.subject, (msg) => {
 ```
 
 ### Snapshot Mode
+
+Full query result on every change. Just replace your data.
+
 ```json
 // Initial response
-{ "rows": [{"id": 1, "name": "Order 1"}, {"id": 2, "name": "Order 2"}] }
+{ "snapshot": [{"id": 1, "name": "Order 1"}, {"id": 2, "name": "Order 2"}] }
 
 // On any change - full new snapshot
-{ "seq": 5, "ts": 1706400000000, "rows": [{"id": 1, "name": "Updated"}, {"id": 2, "name": "Order 2"}] }
+{ "seq": 5, "ts": 1706400000000, "snapshot": [{"id": 1, "name": "Updated"}, {"id": 2, "name": "Order 2"}] }
 ```
 
 ### Latency Measurement
