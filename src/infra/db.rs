@@ -15,9 +15,7 @@ use crate::core::row::{RowData, RowValue};
 // Column name interning for reuse across queries
 static COL_NAMES: std::sync::LazyLock<
     dashmap::DashMap<String, Arc<str>, rustc_hash::FxBuildHasher>,
-> = std::sync::LazyLock::new(
-    || dashmap::DashMap::with_hasher(rustc_hash::FxBuildHasher),
-);
+> = std::sync::LazyLock::new(|| dashmap::DashMap::with_hasher(rustc_hash::FxBuildHasher));
 
 /// Intern column name for reuse across queries (public for wal.rs)
 #[inline]

@@ -38,6 +38,10 @@ docker-build:
 watch:
 	cargo watch -x run
 
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "✅ Git hooks configured"
+
 help:
 	@echo "LiveQuery Server Makefile"
 	@echo ""
@@ -57,3 +61,4 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  watch        - Run with auto-reload"
+	@echo "  setup-hooks  - Configure git pre-commit hooks"

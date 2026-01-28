@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pre-commit hook for Rust projects
+
+set -e
+
+echo "🔍 Running cargo fmt..."
+cargo fmt --all -- --check
+if [ $? -ne 0 ]; then
+    echo "❌ Format check failed. Run 'cargo fmt' to fix."
+    exit 1
+fi
+
+echo "🔍 Running cargo clippy..."
+cargo clippy --all-features -- -D warnings
+if [ $? -ne 0 ]; then
+    echo "❌ Clippy found issues."
+    exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"

@@ -519,10 +519,10 @@ fn bench_rowvalue(c: &mut Criterion) {
         b.iter(|| RowValue::from_value(black_box(&json_val)))
     });
     group.bench_function("from_str_short", |b| {
-        b.iter(|| RowValue::from_str(black_box(short)))
+        b.iter(|| RowValue::intern_str(black_box(short)))
     });
     group.bench_function("from_str_long", |b| {
-        b.iter(|| RowValue::from_str(black_box(long)))
+        b.iter(|| RowValue::intern_str(black_box(long)))
     });
     group.bench_function("to_value", |b| b.iter(|| row_value.to_value()));
     group.bench_function("hash_into", |b| {
@@ -785,11 +785,11 @@ fn bench_rowdata_creation(c: &mut Criterion) {
         b.iter(|| {
             let vals = vec![
                 RowValue::Int(1),
-                RowValue::from_str("John"),
-                RowValue::from_str("john@test.com"),
+                RowValue::intern_str("John"),
+                RowValue::intern_str("john@test.com"),
                 RowValue::Int(30),
                 RowValue::Bool(true),
-                RowValue::from_str("2024-01-01"),
+                RowValue::intern_str("2024-01-01"),
             ];
             RowData::new(black_box(col_names.clone()), vals)
         })
@@ -808,11 +808,11 @@ fn bench_rowdata_creation(c: &mut Criterion) {
             ];
             let vals = vec![
                 RowValue::Int(1),
-                RowValue::from_str("John"),
-                RowValue::from_str("john@test.com"),
+                RowValue::intern_str("John"),
+                RowValue::intern_str("john@test.com"),
                 RowValue::Int(30),
                 RowValue::Bool(true),
-                RowValue::from_str("2024-01-01"),
+                RowValue::intern_str("2024-01-01"),
             ];
             RowData::new(Arc::from(cols.into_boxed_slice()), vals)
         })
@@ -825,11 +825,11 @@ fn bench_rowdata_creation(c: &mut Criterion) {
             for i in 0..100 {
                 let vals = vec![
                     RowValue::Int(i),
-                    RowValue::from_str("John"),
-                    RowValue::from_str("john@test.com"),
+                    RowValue::intern_str("John"),
+                    RowValue::intern_str("john@test.com"),
                     RowValue::Int(30),
                     RowValue::Bool(true),
-                    RowValue::from_str("2024-01-01"),
+                    RowValue::intern_str("2024-01-01"),
                 ];
                 rows.push(RowData::new(col_names.clone(), vals));
             }
@@ -852,11 +852,11 @@ fn bench_rowdata_creation(c: &mut Criterion) {
                 ];
                 let vals = vec![
                     RowValue::Int(i),
-                    RowValue::from_str("John"),
-                    RowValue::from_str("john@test.com"),
+                    RowValue::intern_str("John"),
+                    RowValue::intern_str("john@test.com"),
                     RowValue::Int(30),
                     RowValue::Bool(true),
-                    RowValue::from_str("2024-01-01"),
+                    RowValue::intern_str("2024-01-01"),
                 ];
                 rows.push(RowData::new(Arc::from(cols.into_boxed_slice()), vals));
             }
@@ -940,14 +940,14 @@ fn bench_memory_patterns(c: &mut Criterion) {
     group.bench_function("string_intern_hit", |b| {
         // Warm up intern cache
         for _ in 0..100 {
-            let _ = RowValue::from_str("common_column");
+            let _ = RowValue::intern_str("common_column");
         }
-        b.iter(|| RowValue::from_str(black_box("common_column")))
+        b.iter(|| RowValue::intern_str(black_box("common_column")))
     });
 
     group.bench_function("string_no_intern_long", |b| {
         b.iter(|| {
-            RowValue::from_str(black_box(
+            RowValue::intern_str(black_box(
                 "this_is_a_very_long_string_that_exceeds_intern_limit_and_wont_be_cached",
             ))
         })
