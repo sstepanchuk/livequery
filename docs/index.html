@@ -204,7 +204,7 @@ while let Some(msg) = sub.next().await {
                         <span class="mode-name">snapshot</span>
                     </div>
                     <p>Receive full query result on every change. Just replace your data. Best for small datasets or guaranteed consistency.</p>
-                    <pre><code class="language-javascript">{ "seq": 1, "ts": 1706464800000, "rows": [
+                    <pre><code class="language-javascript">{ "seq": 1, "ts": 1706464800000, "snapshot": [
   { "id": 1, "status": "pending" },
   { "id": 2, "status": "shipped" }
 ]}</code></pre>

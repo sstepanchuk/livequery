@@ -114,12 +114,12 @@ pub struct SubscribeResponse {
     pub is_new: bool,
     pub seq: u64,
     pub mode: SubscriptionMode,
-    /// Initial snapshot for events mode
+    /// Initial events for events mode (mz_diff based)
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub snapshot: Vec<SubscribeEvent>,
-    /// Initial data for snapshot mode
+    pub events: Vec<SubscribeEvent>,
+    /// Full snapshot for snapshot mode
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub rows: Vec<Arc<Value>>,
+    pub snapshot: Vec<Arc<Value>>,
 }
 
 impl SubscribeResponse {
@@ -130,7 +130,7 @@ impl SubscribeResponse {
         subject: String,
         is_new: bool,
         seq: u64,
-        snapshot: Vec<SubscribeEvent>,
+        events: Vec<SubscribeEvent>,
     ) -> Self {
         Self {
             success: true,
@@ -140,18 +140,18 @@ impl SubscribeResponse {
             is_new,
             seq,
             mode: SubscriptionMode::Events,
-            snapshot,
-            rows: vec![],
+            events,
+            snapshot: vec![],
         }
     }
-    /// Snapshot mode response with full rows
+    /// Snapshot mode response with full snapshot
     #[inline]
     pub fn ok_snapshot(
         sub_id: String,
         subject: String,
         is_new: bool,
         seq: u64,
-        rows: Vec<Arc<Value>>,
+        snapshot: Vec<Arc<Value>>,
     ) -> Self {
         Self {
             success: true,
@@ -161,8 +161,8 @@ impl SubscribeResponse {
             is_new,
             seq,
             mode: SubscriptionMode::Snapshot,
-            snapshot: vec![],
-            rows,
+            events: vec![],
+            snapshot,
         }
     }
     #[inline]

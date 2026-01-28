@@ -297,7 +297,7 @@ impl WalStreamer {
         if let Some(rows) = snap_rows {
             let bytes = Bytes::from(
                 serde_json::to_vec(
-                    &serde_json::json!({ "seq": batch.seq, "ts": batch.ts, "rows": rows }),
+                    &serde_json::json!({ "seq": batch.seq, "ts": batch.ts, "snapshot": rows }),
                 )
                 .unwrap_or_default(),
             );
