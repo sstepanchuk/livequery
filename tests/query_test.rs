@@ -35,7 +35,7 @@ fn test_multiple_joins() {
     let a = analyze(
         "SELECT * FROM users u 
          JOIN orders o ON u.id = o.user_id 
-         JOIN products p ON o.product_id = p.id"
+         JOIN products p ON o.product_id = p.id",
     );
     assert!(a.is_valid);
     assert_eq!(a.tables.len(), 3);
@@ -43,9 +43,7 @@ fn test_multiple_joins() {
 
 #[test]
 fn test_subquery() {
-    let a = analyze(
-        "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)"
-    );
+    let a = analyze("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)");
     assert!(a.is_valid);
     assert!(a.tables.len() >= 1);
     assert!(a.tables.contains(&"users".to_string()));
@@ -55,16 +53,14 @@ fn test_subquery() {
 fn test_cte() {
     let a = analyze(
         "WITH active_users AS (SELECT * FROM users WHERE active = true)
-         SELECT * FROM active_users"
+         SELECT * FROM active_users",
     );
     assert!(a.is_valid);
 }
 
 #[test]
 fn test_aggregation() {
-    let a = analyze(
-        "SELECT user_id, COUNT(*), SUM(amount) FROM orders GROUP BY user_id"
-    );
+    let a = analyze("SELECT user_id, COUNT(*), SUM(amount) FROM orders GROUP BY user_id");
     assert!(a.is_valid);
     assert_eq!(a.tables, vec!["orders"]);
 }

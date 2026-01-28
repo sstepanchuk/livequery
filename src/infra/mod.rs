@@ -3,7 +3,7 @@ pub mod nats;
 pub mod pgoutput;
 pub mod wal_stream;
 
-pub use db::{DbPool, intern_col_name};
+pub use db::{intern_col_name, DbPool};
 pub use nats::NatsHandler;
+pub use pgoutput::{ColMeta, PgOutputDecoder, WalChange};
 pub use wal_stream::WalStreamer;
-pub use pgoutput::{PgOutputDecoder, WalChange, ColMeta};

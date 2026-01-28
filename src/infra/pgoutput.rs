@@ -1,9 +1,9 @@
 //! pgoutput binary protocol decoder - optimized for minimal allocations
 
-use rustc_hash::FxHashMap;
-use std::sync::Arc;
 use crate::core::row::{RowData, RowValue};
 use crate::infra::intern_col_name;
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
 
 /// Column metadata (interned name + type OID for parsing)
 #[derive(Clone)]
@@ -40,7 +40,9 @@ pub struct PgOutputDecoder {
 impl PgOutputDecoder {
     #[inline]
     pub fn new() -> Self {
-        Self { rels: FxHashMap::default() }
+        Self {
+            rels: FxHashMap::default(),
+        }
     }
 
     #[inline]
@@ -67,21 +69,23 @@ impl PgOutputDecoder {
     fn parse_relation(&mut self, data: &[u8]) -> Option<WalChange> {
         let mut p = 1;
         let rel_id = read_u32(data, &mut p)?;
-        
+
         // Skip schema (null-terminated)
         skip_cstr(data, &mut p)?;
-        
+
         // Table name
         let table = read_cstr(data, &mut p)?;
         let table_arc = intern_col_name(&table.to_ascii_lowercase());
-        
+
         // Skip replica identity
         p += 1;
-        if p + 2 > data.len() { return None; }
-        
+        if p + 2 > data.len() {
+            return None;
+        }
+
         let n_cols = read_u16(data, &mut p)? as usize;
         let mut cols = Vec::with_capacity(n_cols);
-        
+
         for _ in 0..n_cols {
             p += 1; // flags
             let name = read_cstr(data, &mut p)?;
@@ -92,20 +96,26 @@ impl PgOutputDecoder {
                 oid,
             });
         }
-        
-        let col_names: Arc<[Arc<str>]> = Arc::from(cols.iter().map(|c| c.name.clone()).collect::<Vec<_>>());
-        self.rels.insert(rel_id, RelCache {
-            table: table_arc,
-            cols: Arc::from(cols),
-            col_names,
-        });
+
+        let col_names: Arc<[Arc<str>]> =
+            Arc::from(cols.iter().map(|c| c.name.clone()).collect::<Vec<_>>());
+        self.rels.insert(
+            rel_id,
+            RelCache {
+                table: table_arc,
+                cols: Arc::from(cols),
+                col_names,
+            },
+        );
         Some(WalChange::Other)
     }
 
     fn parse_insert(&self, data: &[u8]) -> Option<WalChange> {
         let mut p = 1;
         let rel = read_u32(data, &mut p)?;
-        if data.get(p)? != &b'N' { return None; }
+        if data.get(p)? != &b'N' {
+            return None;
+        }
         p += 1;
         let cache = self.rels.get(&rel)?;
         let row = parse_tuple(data, &mut p, &cache.cols, &cache.col_names)?;
@@ -116,14 +126,16 @@ impl PgOutputDecoder {
         let mut p = 1;
         let rel = read_u32(data, &mut p)?;
         let cache = self.rels.get(&rel)?;
-        
+
         // Skip old tuple if present
         if matches!(data.get(p), Some(b'K') | Some(b'O')) {
             p += 1;
             skip_tuple(data, &mut p)?;
         }
-        
-        if data.get(p)? != &b'N' { return None; }
+
+        if data.get(p)? != &b'N' {
+            return None;
+        }
         p += 1;
         let row = parse_tuple(data, &mut p, &cache.cols, &cache.col_names)?;
         Some(WalChange::Update { rel, row })
@@ -146,21 +158,20 @@ impl PgOutputDecoder {
         }
         Some(WalChange::Truncate { rels })
     }
-
 }
 
 // ============ Optimized binary helpers ============
 
 #[inline(always)]
 fn read_u32(data: &[u8], p: &mut usize) -> Option<u32> {
-    let v = u32::from_be_bytes(data.get(*p..*p+4)?.try_into().ok()?);
+    let v = u32::from_be_bytes(data.get(*p..*p + 4)?.try_into().ok()?);
     *p += 4;
     Some(v)
 }
 
 #[inline(always)]
 fn read_u16(data: &[u8], p: &mut usize) -> Option<u16> {
-    let v = u16::from_be_bytes(data.get(*p..*p+2)?.try_into().ok()?);
+    let v = u16::from_be_bytes(data.get(*p..*p + 2)?.try_into().ok()?);
     *p += 2;
     Some(v)
 }
@@ -182,26 +193,34 @@ fn skip_cstr(data: &[u8], p: &mut usize) -> Option<()> {
 
 /// Parse tuple into RowData - uses pre-computed col_names for zero-copy
 #[inline]
-fn parse_tuple(data: &[u8], p: &mut usize, cols: &[ColMeta], col_names: &Arc<[Arc<str>]>) -> Option<RowData> {
+fn parse_tuple(
+    data: &[u8],
+    p: &mut usize,
+    cols: &[ColMeta],
+    col_names: &Arc<[Arc<str>]>,
+) -> Option<RowData> {
     let n = read_u16(data, p)? as usize;
     let mut vals: Vec<RowValue> = Vec::with_capacity(n);
-    
+
     for i in 0..n {
         let col = cols.get(i)?;
-        
+
         match *data.get(*p)? {
-            b'n' | b'u' => { *p += 1; vals.push(RowValue::Null); }
+            b'n' | b'u' => {
+                *p += 1;
+                vals.push(RowValue::Null);
+            }
             b't' => {
                 *p += 1;
                 let len = read_u32(data, p)? as usize;
-                let text = std::str::from_utf8(data.get(*p..*p+len)?).ok()?;
+                let text = std::str::from_utf8(data.get(*p..*p + len)?).ok()?;
                 *p += len;
                 vals.push(parse_val(text, col.oid));
             }
             b'b' => {
                 *p += 1;
                 let len = read_u32(data, p)? as usize;
-                vals.push(RowValue::Bytes(data.get(*p..*p+len)?.to_vec()));
+                vals.push(RowValue::Bytes(data.get(*p..*p + len)?.to_vec()));
                 *p += len;
             }
             _ => return None,
@@ -217,7 +236,9 @@ fn skip_tuple(data: &[u8], p: &mut usize) -> Option<()> {
     let n = read_u16(data, p)? as usize;
     for _ in 0..n {
         match *data.get(*p)? {
-            b'n' | b'u' => { *p += 1; }
+            b'n' | b'u' => {
+                *p += 1;
+            }
             b't' | b'b' => {
                 *p += 1;
                 let len = read_u32(data, p)? as usize;
@@ -238,15 +259,25 @@ fn parse_val(s: &str, oid: u32) -> RowValue {
             Some(b'f') => RowValue::Bool(false),
             _ => RowValue::from_str(s),
         },
-        20 | 21 | 23 => s.parse().map(RowValue::Int).unwrap_or_else(|_| RowValue::from_str(s)),
-        700 | 701 => s.parse().map(RowValue::Float).unwrap_or_else(|_| RowValue::from_str(s)),
-        114 | 3802 => serde_json::from_str(s).map(RowValue::Json).unwrap_or_else(|_| RowValue::from_str(s)),
+        20 | 21 | 23 => s
+            .parse()
+            .map(RowValue::Int)
+            .unwrap_or_else(|_| RowValue::from_str(s)),
+        700 | 701 => s
+            .parse()
+            .map(RowValue::Float)
+            .unwrap_or_else(|_| RowValue::from_str(s)),
+        114 | 3802 => serde_json::from_str(s)
+            .map(RowValue::Json)
+            .unwrap_or_else(|_| RowValue::from_str(s)),
         _ => RowValue::from_str(s),
     }
 }
 
 impl Default for PgOutputDecoder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

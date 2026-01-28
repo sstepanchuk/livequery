@@ -1,9 +1,9 @@
 //! SQL Query Analysis with WHERE Evaluation
 
+use crate::core::row::{RowData, RowValue};
 use dashmap::DashMap;
 use rustc_hash::{FxBuildHasher, FxHasher};
 use serde_json::Value;
-use crate::core::row::{RowData, RowValue};
 use sqlparser::ast::*;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock};
 
 // Use Arc to avoid cloning QueryAnalysis on cache hit
-static CACHE: LazyLock<DashMap<u64, Arc<QueryAnalysis>, FxBuildHasher>> = 
+static CACHE: LazyLock<DashMap<u64, Arc<QueryAnalysis>, FxBuildHasher>> =
     LazyLock::new(|| DashMap::with_hasher(FxBuildHasher::default()));
 
 /// Filter extracted from WHERE clause  
@@ -31,7 +31,10 @@ pub enum WhereFilter {
     /// col <= val
     Lte { col: Box<str>, val: FilterValue },
     /// col IN (val1, val2, ...)
-    In { col: Box<str>, vals: Box<[FilterValue]> },
+    In {
+        col: Box<str>,
+        vals: Box<[FilterValue]>,
+    },
     /// col IS NULL
     IsNull { col: Box<str> },
     /// col IS NOT NULL
@@ -80,21 +83,23 @@ pub struct QueryAnalysis {
 #[inline]
 pub fn analyze(q: &str) -> QueryAnalysis {
     let h = hash(q);
-    
+
     // Fast path: cache hit - clone from Arc (QueryAnalysis is small)
     if let Some(cached) = CACHE.get(&h) {
         return QueryAnalysis::clone(&cached);
     }
-    
+
     // Slow path: parse and cache
     let result = analyze_inner(q);
-    if result.is_valid { 
+    if result.is_valid {
         // Evict random entries if cache is full (simple LRU alternative)
         if CACHE.len() >= 1000 {
             let to_remove: Vec<u64> = CACHE.iter().take(100).map(|e| *e.key()).collect();
-            for k in to_remove { CACHE.remove(&k); }
+            for k in to_remove {
+                CACHE.remove(&k);
+            }
         }
-        CACHE.insert(h, Arc::new(result.clone())); 
+        CACHE.insert(h, Arc::new(result.clone()));
     }
     result
 }
@@ -105,53 +110,102 @@ fn analyze_inner(q: &str) -> QueryAnalysis {
         Ok(_) => return err("Empty"),
         Err(e) => return err(&format!("Parse: {e}")),
     };
-    
+
     let ast = match &stmts[0] {
         Statement::Query(q) => q,
         _ => return err("Only SELECT"),
     };
-    
+
     let mut tables = Vec::with_capacity(2);
     let mut has_join = false;
     let mut has_subq = false;
     extract(ast, &mut tables, &mut has_join, &mut has_subq);
-    
+
     let filter = extract_where(ast);
-    let is_simple = tables.len() == 1 && !has_join && !has_subq && !matches!(filter, WhereFilter::Complex);
-    
-    QueryAnalysis { is_valid: true, error: None, tables, filter, is_simple }
+    let is_simple =
+        tables.len() == 1 && !has_join && !has_subq && !matches!(filter, WhereFilter::Complex);
+
+    QueryAnalysis {
+        is_valid: true,
+        error: None,
+        tables,
+        filter,
+        is_simple,
+    }
 }
 
 #[inline]
 fn err(s: &str) -> QueryAnalysis {
-    QueryAnalysis { is_valid: false, error: Some(s.into()), tables: vec![], filter: WhereFilter::None, is_simple: false }
+    QueryAnalysis {
+        is_valid: false,
+        error: Some(s.into()),
+        tables: vec![],
+        filter: WhereFilter::None,
+        is_simple: false,
+    }
 }
 
 fn extract(q: &Query, t: &mut Vec<String>, has_join: &mut bool, has_subq: &mut bool) {
-    if let Some(w) = &q.with { for c in &w.cte_tables { extract(&c.query, t, has_join, has_subq); } }
+    if let Some(w) = &q.with {
+        for c in &w.cte_tables {
+            extract(&c.query, t, has_join, has_subq);
+        }
+    }
     extract_set(&q.body, t, has_join, has_subq);
 }
 
 fn extract_set(e: &SetExpr, t: &mut Vec<String>, has_join: &mut bool, has_subq: &mut bool) {
     match e {
-        SetExpr::Select(s) => { for f in &s.from { extract_join_info(f, t, has_join, has_subq); } }
-        SetExpr::Query(q) => { *has_subq = true; extract(q, t, has_join, has_subq); }
-        SetExpr::SetOperation { left, right, .. } => { extract_set(left, t, has_join, has_subq); extract_set(right, t, has_join, has_subq); }
+        SetExpr::Select(s) => {
+            for f in &s.from {
+                extract_join_info(f, t, has_join, has_subq);
+            }
+        }
+        SetExpr::Query(q) => {
+            *has_subq = true;
+            extract(q, t, has_join, has_subq);
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            extract_set(left, t, has_join, has_subq);
+            extract_set(right, t, has_join, has_subq);
+        }
         _ => {}
     }
 }
 
-fn extract_join_info(j: &TableWithJoins, t: &mut Vec<String>, has_join: &mut bool, has_subq: &mut bool) {
+fn extract_join_info(
+    j: &TableWithJoins,
+    t: &mut Vec<String>,
+    has_join: &mut bool,
+    has_subq: &mut bool,
+) {
     extract_factor(&j.relation, t, has_subq);
-    if !j.joins.is_empty() { *has_join = true; }
-    for x in &j.joins { extract_factor(&x.relation, t, has_subq); }
+    if !j.joins.is_empty() {
+        *has_join = true;
+    }
+    for x in &j.joins {
+        extract_factor(&x.relation, t, has_subq);
+    }
 }
 
 fn extract_factor(f: &TableFactor, t: &mut Vec<String>, has_subq: &mut bool) {
     match f {
-        TableFactor::Table { name, .. } => { if let Some(i) = name.0.last() { t.push(i.value.to_lowercase()); } }
-        TableFactor::Derived { subquery, .. } => { *has_subq = true; let mut hj = false; extract(subquery, t, &mut hj, has_subq); }
-        TableFactor::NestedJoin { table_with_joins, .. } => { let mut hj = false; extract_join_info(table_with_joins, t, &mut hj, has_subq); }
+        TableFactor::Table { name, .. } => {
+            if let Some(i) = name.0.last() {
+                t.push(i.value.to_lowercase());
+            }
+        }
+        TableFactor::Derived { subquery, .. } => {
+            *has_subq = true;
+            let mut hj = false;
+            extract(subquery, t, &mut hj, has_subq);
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            let mut hj = false;
+            extract_join_info(table_with_joins, t, &mut hj, has_subq);
+        }
         _ => {}
     }
 }
@@ -172,14 +226,25 @@ fn parse_expr(e: &Expr) -> WhereFilter {
         // col = val
         Expr::BinaryOp { left, op, right } => parse_binop(left, op, right),
         // col IS NULL / IS NOT NULL
-        Expr::IsNull(e) => col_name(e).map_or(WhereFilter::Complex, |c| WhereFilter::IsNull { col: c }),
-        Expr::IsNotNull(e) => col_name(e).map_or(WhereFilter::Complex, |c| WhereFilter::IsNotNull { col: c }),
+        Expr::IsNull(e) => {
+            col_name(e).map_or(WhereFilter::Complex, |c| WhereFilter::IsNull { col: c })
+        }
+        Expr::IsNotNull(e) => {
+            col_name(e).map_or(WhereFilter::Complex, |c| WhereFilter::IsNotNull { col: c })
+        }
         // col IN (1, 2, 3)
-        Expr::InList { expr, list, negated } if !negated => {
+        Expr::InList {
+            expr,
+            list,
+            negated,
+        } if !negated => {
             let col = col_name(expr);
             let vals: Option<Vec<_>> = list.iter().map(parse_value).collect();
             match (col, vals) {
-                (Some(c), Some(v)) if !v.is_empty() => WhereFilter::In { col: c, vals: v.into_boxed_slice() },
+                (Some(c), Some(v)) if !v.is_empty() => WhereFilter::In {
+                    col: c,
+                    vals: v.into_boxed_slice(),
+                },
                 _ => WhereFilter::Complex,
             }
         }
@@ -198,17 +263,20 @@ fn parse_binop(left: &Expr, op: &BinaryOperator, right: &Expr) -> WhereFilter {
                 (WhereFilter::Complex, _) | (_, WhereFilter::Complex) => WhereFilter::Complex,
                 (WhereFilter::And(a), WhereFilter::And(b)) => {
                     let mut v = Vec::with_capacity(a.len() + b.len());
-                    v.extend_from_slice(a); v.extend_from_slice(b);
+                    v.extend_from_slice(a);
+                    v.extend_from_slice(b);
                     WhereFilter::And(v.into_boxed_slice())
                 }
                 (WhereFilter::And(a), _) => {
                     let mut v = Vec::with_capacity(a.len() + 1);
-                    v.extend_from_slice(a); v.push(r);
+                    v.extend_from_slice(a);
+                    v.push(r);
                     WhereFilter::And(v.into_boxed_slice())
                 }
                 (_, WhereFilter::And(b)) => {
                     let mut v = Vec::with_capacity(1 + b.len());
-                    v.push(l); v.extend_from_slice(b);
+                    v.push(l);
+                    v.extend_from_slice(b);
                     WhereFilter::And(v.into_boxed_slice())
                 }
                 _ => WhereFilter::And(Box::new([l, r])),
@@ -233,18 +301,26 @@ fn parse_binop(left: &Expr, op: &BinaryOperator, right: &Expr) -> WhereFilter {
 }
 
 fn cmp_filter<F>(left: &Expr, right: &Expr, f: F) -> WhereFilter
-where F: FnOnce(Box<str>, FilterValue) -> WhereFilter {
+where
+    F: FnOnce(Box<str>, FilterValue) -> WhereFilter,
+{
     // Try col op val
-    if let (Some(c), Some(v)) = (col_name(left), parse_value(right)) { return f(c, v); }
+    if let (Some(c), Some(v)) = (col_name(left), parse_value(right)) {
+        return f(c, v);
+    }
     // Try val op col (reversed)
-    if let (Some(v), Some(c)) = (parse_value(left), col_name(right)) { return f(c, v); }
+    if let (Some(v), Some(c)) = (parse_value(left), col_name(right)) {
+        return f(c, v);
+    }
     WhereFilter::Complex
 }
 
 fn col_name(e: &Expr) -> Option<Box<str>> {
     match e {
         Expr::Identifier(id) => Some(id.value.to_lowercase().into_boxed_str()),
-        Expr::CompoundIdentifier(ids) => ids.last().map(|i| i.value.to_lowercase().into_boxed_str()),
+        Expr::CompoundIdentifier(ids) => {
+            ids.last().map(|i| i.value.to_lowercase().into_boxed_str())
+        }
         _ => None,
     }
 }
@@ -255,19 +331,31 @@ fn parse_value(e: &Expr) -> Option<FilterValue> {
             sqlparser::ast::Value::Null => Some(FilterValue::Null),
             sqlparser::ast::Value::Boolean(b) => Some(FilterValue::Bool(*b)),
             sqlparser::ast::Value::Number(n, _) => {
-                if let Ok(i) = n.parse::<i64>() { Some(FilterValue::Int(i)) }
-                else if let Ok(f) = n.parse::<f64>() { Some(FilterValue::Float(f)) }
-                else { None }
+                if let Ok(i) = n.parse::<i64>() {
+                    Some(FilterValue::Int(i))
+                } else if let Ok(f) = n.parse::<f64>() {
+                    Some(FilterValue::Float(f))
+                } else {
+                    None
+                }
             }
-            sqlparser::ast::Value::SingleQuotedString(s) | sqlparser::ast::Value::DoubleQuotedString(s) => {
+            sqlparser::ast::Value::SingleQuotedString(s)
+            | sqlparser::ast::Value::DoubleQuotedString(s) => {
                 Some(FilterValue::Str(s.clone().into_boxed_str()))
             }
             _ => None,
-        }
-        Expr::UnaryOp { op: UnaryOperator::Minus, expr } => {
-            if let Some(FilterValue::Int(i)) = parse_value(expr) { Some(FilterValue::Int(-i)) }
-            else if let Some(FilterValue::Float(f)) = parse_value(expr) { Some(FilterValue::Float(-f)) }
-            else { None }
+        },
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => {
+            if let Some(FilterValue::Int(i)) = parse_value(expr) {
+                Some(FilterValue::Int(-i))
+            } else if let Some(FilterValue::Float(f)) = parse_value(expr) {
+                Some(FilterValue::Float(-f))
+            } else {
+                None
+            }
         }
         _ => None,
     }
@@ -282,43 +370,71 @@ impl WhereFilter {
         match self {
             WhereFilter::None => EvalResult::Match,
             WhereFilter::Complex => EvalResult::Unknown,
-            
-            WhereFilter::Eq { col, val } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if val.matches(v) { EvalResult::Match } else { EvalResult::NoMatch },
-                    None => EvalResult::Unknown,
+
+            WhereFilter::Eq { col, val } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if val.matches(v) {
+                        EvalResult::Match
+                    } else {
+                        EvalResult::NoMatch
+                    }
                 }
-            }
-            WhereFilter::Ne { col, val } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if val.matches(v) { EvalResult::NoMatch } else { EvalResult::Match },
-                    None => EvalResult::Unknown,
+                None => EvalResult::Unknown,
+            },
+            WhereFilter::Ne { col, val } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if val.matches(v) {
+                        EvalResult::NoMatch
+                    } else {
+                        EvalResult::Match
+                    }
                 }
+                None => EvalResult::Unknown,
+            },
+            WhereFilter::Gt { col, val } => {
+                cmp_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Greater)
             }
-            WhereFilter::Gt { col, val } => cmp_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Greater),
-            WhereFilter::Gte { col, val } => cmp_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Less),
-            WhereFilter::Lt { col, val } => cmp_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Less),
-            WhereFilter::Lte { col, val } => cmp_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Greater),
-            
-            WhereFilter::In { col, vals } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if vals.iter().any(|fv| fv.matches(v)) { EvalResult::Match } else { EvalResult::NoMatch },
-                    None => EvalResult::Unknown,
+            WhereFilter::Gte { col, val } => {
+                cmp_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Less)
+            }
+            WhereFilter::Lt { col, val } => {
+                cmp_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Less)
+            }
+            WhereFilter::Lte { col, val } => {
+                cmp_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Greater)
+            }
+
+            WhereFilter::In { col, vals } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if vals.iter().any(|fv| fv.matches(v)) {
+                        EvalResult::Match
+                    } else {
+                        EvalResult::NoMatch
+                    }
                 }
-            }
-            WhereFilter::IsNull { col } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if v.is_null() { EvalResult::Match } else { EvalResult::NoMatch },
-                    None => EvalResult::Unknown,
+                None => EvalResult::Unknown,
+            },
+            WhereFilter::IsNull { col } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if v.is_null() {
+                        EvalResult::Match
+                    } else {
+                        EvalResult::NoMatch
+                    }
                 }
-            }
-            WhereFilter::IsNotNull { col } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if v.is_null() { EvalResult::NoMatch } else { EvalResult::Match },
-                    None => EvalResult::Unknown,
+                None => EvalResult::Unknown,
+            },
+            WhereFilter::IsNotNull { col } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if v.is_null() {
+                        EvalResult::NoMatch
+                    } else {
+                        EvalResult::Match
+                    }
                 }
-            }
-            
+                None => EvalResult::Unknown,
+            },
+
             WhereFilter::And(filters) => {
                 let mut has_unknown = false;
                 for f in filters {
@@ -328,7 +444,11 @@ impl WhereFilter {
                         EvalResult::Match => {}
                     }
                 }
-                if has_unknown { EvalResult::Unknown } else { EvalResult::Match }
+                if has_unknown {
+                    EvalResult::Unknown
+                } else {
+                    EvalResult::Match
+                }
             }
             WhereFilter::Or(filters) => {
                 let mut has_unknown = false;
@@ -339,7 +459,11 @@ impl WhereFilter {
                         EvalResult::NoMatch => {}
                     }
                 }
-                if has_unknown { EvalResult::Unknown } else { EvalResult::NoMatch }
+                if has_unknown {
+                    EvalResult::Unknown
+                } else {
+                    EvalResult::NoMatch
+                }
             }
         }
     }
@@ -352,17 +476,29 @@ impl WhereFilter {
 
             WhereFilter::Eq { col, val } => eq_row_eval(row, col.as_ref(), val, false),
             WhereFilter::Ne { col, val } => eq_row_eval(row, col.as_ref(), val, true),
-            WhereFilter::Gt { col, val } => cmp_row_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Greater),
-            WhereFilter::Gte { col, val } => cmp_row_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Less),
-            WhereFilter::Lt { col, val } => cmp_row_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Less),
-            WhereFilter::Lte { col, val } => cmp_row_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Greater),
-
-            WhereFilter::In { col, vals } => {
-                match row.get(col.as_ref()) {
-                    Some(v) => if vals.iter().any(|fv| eq_row_value(v, fv).unwrap_or(false)) { EvalResult::Match } else { EvalResult::NoMatch },
-                    None => EvalResult::Unknown,
-                }
+            WhereFilter::Gt { col, val } => {
+                cmp_row_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Greater)
             }
+            WhereFilter::Gte { col, val } => {
+                cmp_row_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Less)
+            }
+            WhereFilter::Lt { col, val } => {
+                cmp_row_eval(row, col.as_ref(), val, |o| o == std::cmp::Ordering::Less)
+            }
+            WhereFilter::Lte { col, val } => {
+                cmp_row_eval(row, col.as_ref(), val, |o| o != std::cmp::Ordering::Greater)
+            }
+
+            WhereFilter::In { col, vals } => match row.get(col.as_ref()) {
+                Some(v) => {
+                    if vals.iter().any(|fv| eq_row_value(v, fv).unwrap_or(false)) {
+                        EvalResult::Match
+                    } else {
+                        EvalResult::NoMatch
+                    }
+                }
+                None => EvalResult::Unknown,
+            },
             WhereFilter::IsNull { col } => match row.get(col.as_ref()) {
                 Some(RowValue::Null) => EvalResult::Match,
                 Some(_) => EvalResult::NoMatch,
@@ -383,7 +519,11 @@ impl WhereFilter {
                         EvalResult::Match => {}
                     }
                 }
-                if has_unknown { EvalResult::Unknown } else { EvalResult::Match }
+                if has_unknown {
+                    EvalResult::Unknown
+                } else {
+                    EvalResult::Match
+                }
             }
             WhereFilter::Or(filters) => {
                 let mut has_unknown = false;
@@ -394,7 +534,11 @@ impl WhereFilter {
                         EvalResult::NoMatch => {}
                     }
                 }
-                if has_unknown { EvalResult::Unknown } else { EvalResult::NoMatch }
+                if has_unknown {
+                    EvalResult::Unknown
+                } else {
+                    EvalResult::NoMatch
+                }
             }
         }
     }
@@ -404,7 +548,13 @@ impl WhereFilter {
 fn eq_row_eval(row: &RowData, col: &str, val: &FilterValue, neg: bool) -> EvalResult {
     match row.get(col) {
         Some(v) => match eq_row_value(v, val) {
-            Some(m) => if (m && !neg) || (!m && neg) { EvalResult::Match } else { EvalResult::NoMatch },
+            Some(m) => {
+                if (m && !neg) || (!m && neg) {
+                    EvalResult::Match
+                } else {
+                    EvalResult::NoMatch
+                }
+            }
             None => EvalResult::Unknown,
         },
         None => EvalResult::Unknown,
@@ -413,10 +563,18 @@ fn eq_row_eval(row: &RowData, col: &str, val: &FilterValue, neg: bool) -> EvalRe
 
 #[inline(always)]
 fn cmp_row_eval<F>(row: &RowData, col: &str, val: &FilterValue, pred: F) -> EvalResult
-where F: FnOnce(std::cmp::Ordering) -> bool {
+where
+    F: FnOnce(std::cmp::Ordering) -> bool,
+{
     match row.get(col) {
         Some(v) => match cmp_row_value(v, val) {
-            Some(ord) => if pred(ord) { EvalResult::Match } else { EvalResult::NoMatch },
+            Some(ord) => {
+                if pred(ord) {
+                    EvalResult::Match
+                } else {
+                    EvalResult::NoMatch
+                }
+            }
             None => EvalResult::Unknown,
         },
         None => EvalResult::Unknown,
@@ -453,10 +611,18 @@ fn cmp_row_value(v: &RowValue, val: &FilterValue) -> Option<std::cmp::Ordering> 
 
 #[allow(dead_code)]
 fn cmp_eval<F>(row: &Value, col: &str, val: &FilterValue, pred: F) -> EvalResult
-where F: FnOnce(std::cmp::Ordering) -> bool {
+where
+    F: FnOnce(std::cmp::Ordering) -> bool,
+{
     match row.get(col) {
         Some(v) => match val.cmp_json(v) {
-            Some(ord) => if pred(ord) { EvalResult::Match } else { EvalResult::NoMatch },
+            Some(ord) => {
+                if pred(ord) {
+                    EvalResult::Match
+                } else {
+                    EvalResult::NoMatch
+                }
+            }
             None => EvalResult::Unknown,
         },
         None => EvalResult::Unknown,
@@ -479,7 +645,7 @@ impl FilterValue {
             _ => false,
         }
     }
-    
+
     #[inline]
     #[allow(dead_code)]
     fn cmp_json(&self, v: &Value) -> Option<std::cmp::Ordering> {
@@ -499,7 +665,10 @@ fn hash(s: &str) -> u64 {
     let mut prev_space = true;
     for c in s.bytes() {
         if c.is_ascii_whitespace() {
-            if !prev_space { b' '.hash(&mut h); prev_space = true; }
+            if !prev_space {
+                b' '.hash(&mut h);
+                prev_space = true;
+            }
         } else {
             c.to_ascii_lowercase().hash(&mut h);
             prev_space = false;
@@ -512,7 +681,7 @@ fn hash(s: &str) -> u64 {
 mod tests {
     use super::*;
     use serde_json::json;
-    
+
     #[test]
     fn test_simple_select() {
         let a = analyze("SELECT * FROM users");
@@ -521,7 +690,7 @@ mod tests {
         assert!(a.is_simple);
         assert!(matches!(a.filter, WhereFilter::None));
     }
-    
+
     #[test]
     fn test_join() {
         let a = analyze("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
@@ -529,84 +698,110 @@ mod tests {
         assert_eq!(a.tables.len(), 2);
         assert!(!a.is_simple); // JOIN = not simple
     }
-    
+
     #[test]
     fn test_schema_qualified() {
         let a = analyze("SELECT * FROM public.users");
         assert!(a.is_valid);
         assert_eq!(a.tables, vec!["users"]);
     }
-    
+
     #[test]
     fn test_where_eq() {
         let a = analyze("SELECT * FROM users WHERE id = 5");
         assert!(a.is_simple);
-        assert!(matches!(&a.filter, WhereFilter::Eq { col, val: FilterValue::Int(5) } if col.as_ref() == "id"));
-        
+        assert!(
+            matches!(&a.filter, WhereFilter::Eq { col, val: FilterValue::Int(5) } if col.as_ref() == "id")
+        );
+
         assert_eq!(a.filter.eval(&json!({"id": 5})), EvalResult::Match);
         assert_eq!(a.filter.eval(&json!({"id": 3})), EvalResult::NoMatch);
         assert_eq!(a.filter.eval(&json!({"name": "x"})), EvalResult::Unknown);
     }
-    
+
     #[test]
     fn test_where_string() {
         let a = analyze("SELECT * FROM users WHERE status = 'active'");
         assert!(a.is_simple);
-        
-        assert_eq!(a.filter.eval(&json!({"status": "active"})), EvalResult::Match);
-        assert_eq!(a.filter.eval(&json!({"status": "inactive"})), EvalResult::NoMatch);
+
+        assert_eq!(
+            a.filter.eval(&json!({"status": "active"})),
+            EvalResult::Match
+        );
+        assert_eq!(
+            a.filter.eval(&json!({"status": "inactive"})),
+            EvalResult::NoMatch
+        );
     }
-    
+
     #[test]
     fn test_where_and() {
         let a = analyze("SELECT * FROM orders WHERE user_id = 1 AND status = 'pending'");
         assert!(a.is_simple);
         assert!(matches!(a.filter, WhereFilter::And(_)));
-        
-        assert_eq!(a.filter.eval(&json!({"user_id": 1, "status": "pending"})), EvalResult::Match);
-        assert_eq!(a.filter.eval(&json!({"user_id": 1, "status": "done"})), EvalResult::NoMatch);
-        assert_eq!(a.filter.eval(&json!({"user_id": 2, "status": "pending"})), EvalResult::NoMatch);
+
+        assert_eq!(
+            a.filter.eval(&json!({"user_id": 1, "status": "pending"})),
+            EvalResult::Match
+        );
+        assert_eq!(
+            a.filter.eval(&json!({"user_id": 1, "status": "done"})),
+            EvalResult::NoMatch
+        );
+        assert_eq!(
+            a.filter.eval(&json!({"user_id": 2, "status": "pending"})),
+            EvalResult::NoMatch
+        );
     }
-    
+
     #[test]
     fn test_where_or() {
         let a = analyze("SELECT * FROM users WHERE role = 'admin' OR role = 'moderator'");
         assert!(a.is_simple);
-        
+
         assert_eq!(a.filter.eval(&json!({"role": "admin"})), EvalResult::Match);
-        assert_eq!(a.filter.eval(&json!({"role": "moderator"})), EvalResult::Match);
+        assert_eq!(
+            a.filter.eval(&json!({"role": "moderator"})),
+            EvalResult::Match
+        );
         assert_eq!(a.filter.eval(&json!({"role": "user"})), EvalResult::NoMatch);
     }
-    
+
     #[test]
     fn test_where_in() {
         let a = analyze("SELECT * FROM users WHERE id IN (1, 2, 3)");
         assert!(a.is_simple);
-        
+
         assert_eq!(a.filter.eval(&json!({"id": 1})), EvalResult::Match);
         assert_eq!(a.filter.eval(&json!({"id": 2})), EvalResult::Match);
         assert_eq!(a.filter.eval(&json!({"id": 5})), EvalResult::NoMatch);
     }
-    
+
     #[test]
     fn test_where_comparison() {
         let a = analyze("SELECT * FROM users WHERE age > 18");
         assert!(a.is_simple);
-        
+
         assert_eq!(a.filter.eval(&json!({"age": 25})), EvalResult::Match);
         assert_eq!(a.filter.eval(&json!({"age": 18})), EvalResult::NoMatch);
         assert_eq!(a.filter.eval(&json!({"age": 10})), EvalResult::NoMatch);
     }
-    
+
     #[test]
     fn test_where_is_null() {
         let a = analyze("SELECT * FROM users WHERE deleted_at IS NULL");
         assert!(a.is_simple);
-        
-        assert_eq!(a.filter.eval(&json!({"deleted_at": null})), EvalResult::Match);
-        assert_eq!(a.filter.eval(&json!({"deleted_at": "2024-01-01"})), EvalResult::NoMatch);
+
+        assert_eq!(
+            a.filter.eval(&json!({"deleted_at": null})),
+            EvalResult::Match
+        );
+        assert_eq!(
+            a.filter.eval(&json!({"deleted_at": "2024-01-01"})),
+            EvalResult::NoMatch
+        );
     }
-    
+
     #[test]
     fn test_where_complex() {
         // Subquery = complex

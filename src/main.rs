@@ -7,39 +7,39 @@ mod telemetry;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
-    
+
     let cfg = Arc::new(core::Config::from_env()?);
-    
+
     // Init tracing
     telemetry::init(&cfg)?;
-    
+
     info!("LiveQuery v{} [{}]", VERSION, cfg.server_id);
     cfg.log_summary();
-    
+
     // Init components
     let subs = Arc::new(core::SubscriptionManager::new(cfg.max_subscriptions));
     let db = Arc::new(infra::DbPool::new(&cfg)?);
-    
+
     // Verify DB connection
     info!("Connecting to database...");
     db.ping().await?;
     info!("Database connected");
-    
+
     // Connect to NATS with retry
     info!("Connecting to NATS...");
     let nats = infra::NatsHandler::connect(cfg.clone(), subs.clone()).await?;
     info!("NATS connected");
-    
+
     // Shutdown signal
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
-    
+
     // Task: NATS message handler
     let h1 = tokio::spawn({
         let (n, d, mut rx) = (nats.clone(), db.clone(), shutdown_tx.subscribe());
@@ -50,10 +50,16 @@ async fn main() -> Result<()> {
             }
         }
     });
-    
+
     // Task: WAL streaming (native pgoutput protocol)
     let h2 = tokio::spawn({
-        let (d, c, s, n, mut rx) = (db.clone(), cfg.clone(), subs.clone(), nats.clone(), shutdown_tx.subscribe());
+        let (d, c, s, n, mut rx) = (
+            db.clone(),
+            cfg.clone(),
+            subs.clone(),
+            nats.clone(),
+            shutdown_tx.subscribe(),
+        );
         async move {
             let mut streamer = infra::WalStreamer::new(d, c);
             tokio::select! {
@@ -64,7 +70,7 @@ async fn main() -> Result<()> {
             }
         }
     });
-    
+
     // Task: Client cleanup
     let h3 = tokio::spawn({
         let (s, c, mut rx) = (subs.clone(), cfg.clone(), shutdown_tx.subscribe());
@@ -81,7 +87,7 @@ async fn main() -> Result<()> {
             }
         }
     });
-    
+
     // Task: Periodic stats logging
     let h4 = tokio::spawn({
         let (s, d, mut rx) = (subs.clone(), db.clone(), shutdown_tx.subscribe());
@@ -101,25 +107,28 @@ async fn main() -> Result<()> {
             }
         }
     });
-    
+
     info!("✓ Ready - press Ctrl+C to stop");
-    
+
     // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
     info!("Shutting down (timeout={}s)...", cfg.shutdown_timeout_secs);
-    
+
     // Signal all tasks to stop
     let _ = shutdown_tx.send(());
-    
+
     // Wait for graceful shutdown with timeout
     let shutdown = async {
         let _ = tokio::join!(h1, h2, h3, h4);
     };
-    
-    if tokio::time::timeout(cfg.shutdown_timeout(), shutdown).await.is_err() {
+
+    if tokio::time::timeout(cfg.shutdown_timeout(), shutdown)
+        .await
+        .is_err()
+    {
         warn!("Shutdown timeout, forcing exit");
     }
-    
+
     info!("Goodbye!");
     Ok(())
 }

@@ -3,20 +3,20 @@
 use anyhow::Result;
 use bytes::Bytes;
 use futures::StreamExt;
-use pgwire_replication::{ReplicationClient, ReplicationConfig, ReplicationEvent, Lsn, TlsConfig};
+use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationEvent, TlsConfig};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, trace};
 use url::Url;
 
-use crate::core::{Config, SubscriptionManager};
-use crate::core::query::{EvalResult, WhereFilter};
 use crate::core::event::SubscriptionMode;
+use crate::core::query::{EvalResult, WhereFilter};
 use crate::core::row::RowData;
-use crate::infra::{DbPool, NatsHandler};
+use crate::core::{Config, SubscriptionManager};
 use crate::infra::pgoutput::{PgOutputDecoder, WalChange};
+use crate::infra::{DbPool, NatsHandler};
 
 const MAX_CONCURRENT: usize = 8;
 
@@ -37,7 +37,8 @@ struct WalStats {
 impl WalStreamer {
     pub fn new(db: Arc<DbPool>, cfg: Arc<Config>) -> Self {
         Self {
-            cfg, db,
+            cfg,
+            db,
             decoder: PgOutputDecoder::new(),
             stats: WalStats {
                 processed: AtomicU64::new(0),
@@ -50,10 +51,10 @@ impl WalStreamer {
     pub async fn run(&mut self, subs: Arc<SubscriptionManager>, nats: NatsHandler) -> Result<()> {
         info!("WAL streaming mode starting");
         let config = self.build_config()?;
-        
+
         let mut retry_delay = Duration::from_secs(1);
         const MAX_DELAY: Duration = Duration::from_secs(60);
-        
+
         loop {
             match self.stream_loop(&config, &subs, &nats).await {
                 Ok(()) => {
@@ -74,12 +75,16 @@ impl WalStreamer {
         // Use url crate for robust parsing
         let parsed = Url::parse(&self.cfg.db_url)
             .map_err(|e| anyhow::anyhow!("Invalid database URL: {}", e))?;
-        
-        let user = if parsed.username().is_empty() { "postgres".to_string() } else { parsed.username().to_string() };
+
+        let user = if parsed.username().is_empty() {
+            "postgres".to_string()
+        } else {
+            parsed.username().to_string()
+        };
         let password = parsed.password().unwrap_or("").to_string();
         let host = parsed.host_str().unwrap_or("localhost").to_string();
         let port = parsed.port().unwrap_or(5432);
-        
+
         Ok(ReplicationConfig {
             host: host.into(),
             port,
@@ -104,19 +109,25 @@ impl WalStreamer {
         nats: &NatsHandler,
     ) -> Result<()> {
         let mut client = ReplicationClient::connect(config.clone()).await?;
-        info!("WAL connected slot={} pub={}", self.cfg.wal_slot, self.cfg.wal_publication);
-        
+        info!(
+            "WAL connected slot={} pub={}",
+            self.cfg.wal_slot, self.cfg.wal_publication
+        );
+
         let mut tx: FxHashMap<Arc<str>, Vec<RowData>> = FxHashMap::default();
         let mut in_tx = false;
-        
+
         while let Some(event) = client.recv().await? {
             match event {
                 ReplicationEvent::XLogData { wal_end, data, .. } => {
                     self.stats.processed.fetch_add(1, Relaxed);
-                    
+
                     if let Some(change) = self.decoder.decode(&data) {
                         match change {
-                            WalChange::Begin => { in_tx = true; tx.clear(); }
+                            WalChange::Begin => {
+                                in_tx = true;
+                                tx.clear();
+                            }
                             WalChange::Commit => {
                                 if !tx.is_empty() {
                                     self.process(&tx, subs, nats).await;
@@ -134,20 +145,24 @@ impl WalStreamer {
                             }
                             WalChange::Delete { rel } => {
                                 if let Some(t) = self.decoder.get_table(rel) {
-                                    if subs.has_table(t) { tx.entry(Arc::from(t)).or_default(); }
+                                    if subs.has_table(t) {
+                                        tx.entry(Arc::from(t)).or_default();
+                                    }
                                 }
                             }
                             WalChange::Truncate { rels } => {
                                 for r in rels {
                                     if let Some(t) = self.decoder.get_table(r) {
-                                        if subs.has_table(t) { tx.entry(Arc::from(t)).or_default(); }
+                                        if subs.has_table(t) {
+                                            tx.entry(Arc::from(t)).or_default();
+                                        }
                                     }
                                 }
                             }
                             WalChange::Other => {}
                         }
                     }
-                    
+
                     if !in_tx && !tx.is_empty() {
                         self.process(&tx, subs, nats).await;
                         tx.clear();
@@ -173,19 +188,24 @@ impl WalStreamer {
     ) {
         let mut to_requery: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut skipped = 0usize;
-        
+
         for (table, rows) in changes {
             subs.for_table_queries(table, |qid| {
-                if !to_requery.insert(qid.clone()) { return; }
-                
+                if !to_requery.insert(qid.clone()) {
+                    return;
+                }
+
                 let Some(q) = subs.get_query(qid) else {
                     to_requery.remove(qid);
                     return;
                 };
-                
+
                 // WHERE filter optimization
                 if q.is_simple && !rows.is_empty() && !matches!(q.filter, WhereFilter::None) {
-                    if !rows.iter().any(|r| !matches!(q.filter.eval_row(r), EvalResult::NoMatch)) {
+                    if !rows
+                        .iter()
+                        .any(|r| !matches!(q.filter.eval_row(r), EvalResult::NoMatch))
+                    {
                         skipped += 1;
                         self.stats.skipped.fetch_add(1, Relaxed);
                         debug!("skip {}", &qid[..8.min(qid.len())]);
@@ -194,31 +214,50 @@ impl WalStreamer {
                 }
             });
         }
-        
-        if to_requery.is_empty() { return; }
-        
-        info!("WAL {} tables → {} queries, {} skip", changes.len(), to_requery.len(), skipped);
-        self.stats.requeries.fetch_add(to_requery.len() as u64, Relaxed);
-        
+
+        if to_requery.is_empty() {
+            return;
+        }
+
+        info!(
+            "WAL {} tables → {} queries, {} skip",
+            changes.len(),
+            to_requery.len(),
+            skipped
+        );
+        self.stats
+            .requeries
+            .fetch_add(to_requery.len() as u64, Relaxed);
+
         futures::stream::iter(to_requery)
             .for_each_concurrent(MAX_CONCURRENT, |qid| self.requery(qid, subs, nats))
             .await;
     }
 
     async fn requery(&self, qid: Arc<str>, subs: &SubscriptionManager, nats: &NatsHandler) {
-        let Some(q) = subs.get_query(&qid) else { return };
+        let Some(q) = subs.get_query(&qid) else {
+            return;
+        };
         let (sql, cols) = (q.query.clone(), q.cols.clone());
         let sub_ids: Vec<_> = q.subscribers.read().iter().cloned().collect();
         drop(q);
-        
-        if sub_ids.is_empty() { return; }
-        
-        let Ok(rows) = self.db.query_rows_typed(&sql).await else { return };
-        let Some(q) = subs.get_query(&qid) else { return };
-        
+
+        if sub_ids.is_empty() {
+            return;
+        }
+
+        let Ok(rows) = self.db.query_rows_typed(&sql).await else {
+            return;
+        };
+        let Some(q) = subs.get_query(&qid) else {
+            return;
+        };
+
         let events = q.snap.write().diff_rows(rows, &cols);
-        if events.is_empty() { return; }
-        
+        if events.is_empty() {
+            return;
+        }
+
         let (mut ev_subs, mut snap_subs) = (Vec::new(), Vec::new());
         for sid in sub_ids {
             if let Some(s) = subs.get_sub(&sid) {
@@ -228,31 +267,44 @@ impl WalStreamer {
                 }
             }
         }
-        
-        if ev_subs.is_empty() && snap_subs.is_empty() { return; }
-        
+
+        if ev_subs.is_empty() && snap_subs.is_empty() {
+            return;
+        }
+
         // Lazy: only read snapshot if we have snapshot subscribers
-        let snap_rows = if !snap_subs.is_empty() { Some(q.snap.read().get_all_rows()) } else { None };
-        let Some(batch) = q.make_batch(events) else { return };
+        let snap_rows = if !snap_subs.is_empty() {
+            Some(q.snap.read().get_all_rows())
+        } else {
+            None
+        };
+        let Some(batch) = q.make_batch(events) else {
+            return;
+        };
         drop(q);
-        
+
         // Batch publish: collect all messages and flush once (reduces syscalls)
         let mut messages: Vec<(&str, Bytes)> = Vec::with_capacity(ev_subs.len() + snap_subs.len());
-        
+
         if !ev_subs.is_empty() {
             let bytes = Bytes::from(serde_json::to_vec(&batch).unwrap_or_default());
-            for sid in &ev_subs { 
-                messages.push((sid.as_ref(), bytes.clone())); 
+            for sid in &ev_subs {
+                messages.push((sid.as_ref(), bytes.clone()));
             }
         }
-        
+
         if let Some(rows) = snap_rows {
-            let bytes = Bytes::from(serde_json::to_vec(&serde_json::json!({ "seq": batch.seq, "ts": batch.ts, "rows": rows })).unwrap_or_default());
-            for sid in &snap_subs { 
-                messages.push((sid.as_ref(), bytes.clone())); 
+            let bytes = Bytes::from(
+                serde_json::to_vec(
+                    &serde_json::json!({ "seq": batch.seq, "ts": batch.ts, "rows": rows }),
+                )
+                .unwrap_or_default(),
+            );
+            for sid in &snap_subs {
+                messages.push((sid.as_ref(), bytes.clone()));
             }
         }
-        
+
         // Single flush for all messages
         let _ = nats.publish_batch(&messages).await;
     }

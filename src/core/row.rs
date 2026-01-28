@@ -30,7 +30,11 @@ pub struct RowData {
 
 impl RowData {
     pub fn new(cols: Arc<[Arc<str>]>, values: Vec<RowValue>) -> Self {
-        Self { cols, values, col_idx: OnceLock::new() }
+        Self {
+            cols,
+            values,
+            col_idx: OnceLock::new(),
+        }
     }
 
     /// Create with pre-built index for faster lookups
@@ -38,14 +42,21 @@ impl RowData {
         let idx = build_col_index(&cols);
         let col_idx = OnceLock::new();
         let _ = col_idx.set(Arc::new(idx));
-        Self { cols, values, col_idx }
+        Self {
+            cols,
+            values,
+            col_idx,
+        }
     }
 
     /// Create RowData from JSON Value (for benchmarks and testing)
     pub fn from_value(v: &Value) -> Self {
         let obj = v.as_object();
         let (cols, values): (Vec<Arc<str>>, Vec<RowValue>) = match obj {
-            Some(m) => m.iter().map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v))).unzip(),
+            Some(m) => m
+                .iter()
+                .map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v)))
+                .unzip(),
             None => (vec![], vec![]),
         };
         Self::new(Arc::from(cols.into_boxed_slice()), values)
@@ -56,7 +67,10 @@ impl RowData {
     pub fn from_value_indexed(v: &Value) -> Self {
         let obj = v.as_object();
         let (cols, values): (Vec<Arc<str>>, Vec<RowValue>) = match obj {
-            Some(m) => m.iter().map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v))).unzip(),
+            Some(m) => m
+                .iter()
+                .map(|(k, v)| (Arc::<str>::from(k.as_str()), RowValue::from_value(v)))
+                .unzip(),
             None => (vec![], vec![]),
         };
         Self::new_indexed(Arc::from(cols.into_boxed_slice()), values)
@@ -71,10 +85,16 @@ impl RowData {
         }
         // For small rows (<=8 cols), linear search is faster than building/using hash index
         if self.cols.len() <= 8 {
-            return self.cols.iter().position(|c| c.as_ref() == name).and_then(|i| self.values.get(i));
+            return self
+                .cols
+                .iter()
+                .position(|c| c.as_ref() == name)
+                .and_then(|i| self.values.get(i));
         }
         // Build index once for wider rows
-        let idx = self.col_idx.get_or_init(|| Arc::new(build_col_index(&self.cols)));
+        let idx = self
+            .col_idx
+            .get_or_init(|| Arc::new(build_col_index(&self.cols)));
         idx.get(name).and_then(|&i| self.values.get(i))
     }
 
@@ -106,9 +126,13 @@ impl RowValue {
             Value::Null => RowValue::Null,
             Value::Bool(b) => RowValue::Bool(*b),
             Value::Number(n) => {
-                if let Some(i) = n.as_i64() { RowValue::Int(i) }
-                else if let Some(f) = n.as_f64() { RowValue::Float(f) }
-                else { RowValue::from_str(&n.to_string()) }
+                if let Some(i) = n.as_i64() {
+                    RowValue::Int(i)
+                } else if let Some(f) = n.as_f64() {
+                    RowValue::Float(f)
+                } else {
+                    RowValue::from_str(&n.to_string())
+                }
             }
             Value::String(s) => RowValue::from_str(s),
             Value::Array(a) => RowValue::Array(a.iter().map(RowValue::from_value).collect()),
@@ -119,7 +143,10 @@ impl RowValue {
     #[inline(always)]
     pub fn from_str(s: &str) -> RowValue {
         if s.len() <= INTERN_MAX_LEN {
-            let arc = STR_INTERN.entry(s.to_string()).or_insert_with(|| Arc::from(s)).clone();
+            let arc = STR_INTERN
+                .entry(s.to_string())
+                .or_insert_with(|| Arc::from(s))
+                .clone();
             RowValue::Str(arc)
         } else {
             RowValue::Str(Arc::from(s))
@@ -130,11 +157,26 @@ impl RowValue {
     pub fn hash_into(&self, h: &mut FxHasher) {
         match self {
             RowValue::Null => 0u8.hash(h),
-            RowValue::Bool(b) => { 1u8.hash(h); b.hash(h); }
-            RowValue::Int(i) => { 2u8.hash(h); i.hash(h); }
-            RowValue::Float(f) => { 3u8.hash(h); f.to_bits().hash(h); }
-            RowValue::Str(s) => { 4u8.hash(h); s.hash(h); }
-            RowValue::Bytes(b) => { 5u8.hash(h); b.hash(h); }
+            RowValue::Bool(b) => {
+                1u8.hash(h);
+                b.hash(h);
+            }
+            RowValue::Int(i) => {
+                2u8.hash(h);
+                i.hash(h);
+            }
+            RowValue::Float(f) => {
+                3u8.hash(h);
+                f.to_bits().hash(h);
+            }
+            RowValue::Str(s) => {
+                4u8.hash(h);
+                s.hash(h);
+            }
+            RowValue::Bytes(b) => {
+                5u8.hash(h);
+                b.hash(h);
+            }
             RowValue::Json(v) => {
                 6u8.hash(h);
                 let mut hv = FxHasher::default();
@@ -143,7 +185,9 @@ impl RowValue {
             }
             RowValue::Array(a) => {
                 7u8.hash(h);
-                for v in a { v.hash_into(h); }
+                for v in a {
+                    v.hash_into(h);
+                }
             }
         }
     }
@@ -154,18 +198,21 @@ impl RowValue {
             RowValue::Null => Value::Null,
             RowValue::Bool(b) => Value::Bool(*b),
             RowValue::Int(i) => Value::Number(Number::from(*i)),
-            RowValue::Float(f) => Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null),
+            RowValue::Float(f) => Number::from_f64(*f)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
             RowValue::Str(s) => Value::String(s.to_string()),
             RowValue::Bytes(b) => Value::String(hex_bytes(b)),
             RowValue::Json(v) => v.clone(),
             RowValue::Array(a) => {
                 let mut out = Vec::with_capacity(a.len());
-                for v in a { out.push(v.to_value()); }
+                for v in a {
+                    out.push(v.to_value());
+                }
                 Value::Array(out)
             }
         }
     }
-
 }
 
 #[inline]
@@ -194,15 +241,36 @@ fn build_col_index(cols: &[Arc<str>]) -> FxHashMap<Arc<str>, usize> {
 fn hash_value(v: &Value, h: &mut FxHasher) {
     match v {
         Value::Null => 0u8.hash(h),
-        Value::Bool(b) => { 1u8.hash(h); b.hash(h); }
+        Value::Bool(b) => {
+            1u8.hash(h);
+            b.hash(h);
+        }
         Value::Number(n) => {
             2u8.hash(h);
-            if let Some(i) = n.as_i64() { i.hash(h) }
-            else if let Some(u) = n.as_u64() { u.hash(h) }
-            else if let Some(f) = n.as_f64() { f.to_bits().hash(h) }
+            if let Some(i) = n.as_i64() {
+                i.hash(h)
+            } else if let Some(u) = n.as_u64() {
+                u.hash(h)
+            } else if let Some(f) = n.as_f64() {
+                f.to_bits().hash(h)
+            }
         }
-        Value::String(s) => { 3u8.hash(h); s.hash(h); }
-        Value::Array(a) => { 4u8.hash(h); for x in a { hash_value(x, h); } }
-        Value::Object(m) => { 5u8.hash(h); for (k, v) in m { k.hash(h); hash_value(v, h); } }
+        Value::String(s) => {
+            3u8.hash(h);
+            s.hash(h);
+        }
+        Value::Array(a) => {
+            4u8.hash(h);
+            for x in a {
+                hash_value(x, h);
+            }
+        }
+        Value::Object(m) => {
+            5u8.hash(h);
+            for (k, v) in m {
+                k.hash(h);
+                hash_value(v, h);
+            }
+        }
     }
 }

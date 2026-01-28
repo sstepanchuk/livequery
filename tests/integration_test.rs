@@ -13,7 +13,7 @@ fn test_subscribe_request_format() {
         "identity_columns": ["id"],
         "client_id": "test-client-123"
     });
-    
+
     assert!(request["query"].is_string());
     assert!(request["identity_columns"].is_array());
     assert!(request["client_id"].is_string());
@@ -35,7 +35,7 @@ fn test_subscribe_response_format() {
             }
         ]
     });
-    
+
     assert!(response["success"].as_bool().unwrap());
     assert!(response["query_hash"].is_u64());
     assert!(response["subject"].is_string());
@@ -54,7 +54,7 @@ fn test_event_format() {
     });
     assert_eq!(insert["mz_diff"], 1);
     assert_eq!(insert["mz_progressed"], false);
-    
+
     // Delete event
     let delete = json!({
         "mz_timestamp": 1706284800000i64,
@@ -63,7 +63,7 @@ fn test_event_format() {
         "data": {"id": 1, "name": "Alice", "active": true}
     });
     assert_eq!(delete["mz_diff"], -1);
-    
+
     // Progress/heartbeat event
     let progress = json!({
         "mz_timestamp": 1706284800000i64,
@@ -81,7 +81,7 @@ fn test_unsubscribe_request_format() {
         "query_hash": 12345678901234u64,
         "client_id": "test-client-123"
     });
-    
+
     assert!(request["query_hash"].is_u64());
     assert!(request["client_id"].is_string());
 }
@@ -101,7 +101,7 @@ async fn test_full_subscribe_flow() {
     // 5. Trigger requery
     // 6. Verify events received
     // 7. Unsubscribe
-    
+
     todo!("Implement full integration test")
 }
 
@@ -116,6 +116,6 @@ async fn test_query_deduplication() {
     // 5. Verify subscription still active for client 2
     // 6. Unsubscribe client 2
     // 7. Verify subscription removed
-    
+
     todo!("Implement deduplication test")
 }

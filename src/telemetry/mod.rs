@@ -1,13 +1,13 @@
 use anyhow::Result;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 use crate::core::Config;
 
 /// Initialize tracing. Env: LOG_FORMAT=compact|pretty|json
 pub fn init(cfg: &Config) -> Result<()> {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&cfg.log_level));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&cfg.log_level));
 
     let builder = tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(filter)
