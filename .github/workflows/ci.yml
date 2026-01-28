@@ -57,8 +57,26 @@ jobs:
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo bench --no-run
+      
+      - name: Run benchmarks
+        run: cargo bench -- --output-format bencher | tee bench-output.txt
+      
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Rust Benchmarks
+          tool: 'cargo'
+          output-file-path: bench-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.ref == 'refs/heads/main' }}
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: false
+          alert-comment-cc-users: '@sstepanchuk'
