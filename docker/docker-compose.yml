@@ -43,9 +43,10 @@ services:
       retries: 5
 
   livequery:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: ghcr.io/sstepanchuk/livequery:latest
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
     environment:
       DATABASE_URL: postgres://livequery:livequery@postgres:5432/livequery
       NATS_URL: nats://nats:4222
