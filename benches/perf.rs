@@ -1,10 +1,10 @@
 //! Performance Benchmarks - run with: cargo bench
 
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
-use std::hint::black_box;
 use rustc_hash::FxHasher;
 use serde_json::{Value, json};
 use std::hash::{Hash, Hasher};
+use std::hint::black_box;
 use std::sync::Arc;
 
 use livequery_server::core::event::{EventBatch, SubscribeEvent};
