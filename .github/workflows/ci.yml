@@ -77,7 +77,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
           save-data-file: false
-          alert-threshold: '150%'
+          alert-threshold: '110%'
           comment-on-alert: true
           fail-on-alert: false
           alert-comment-cc-users: '@sstepanchuk'
